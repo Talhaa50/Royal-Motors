@@ -13,3 +13,6 @@ desktop.ini
 
 # Claude Code local settings
 .claude/
+
+# Firebase credentials — keep locally, never commit
+firebase-config.js
