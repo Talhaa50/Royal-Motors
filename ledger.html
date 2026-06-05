@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Vendor Ledger — Royal Motors</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar" id="topbar"></header>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main-content">
+    <div class="page-header">
+      <div><div class="page-title">Vendor Ledger</div><div class="page-subtitle">Full transaction history — credits &amp; debits</div></div>
+      <div class="page-actions">
+        <select class="form-select" style="width:180px;height:34px;" id="vendorF" onchange="ledgerPage=0;render()">
+          <option value="">All Vendors</option>
+        </select>
+        <select class="form-select" style="width:130px;height:34px;" id="typeF" onchange="ledgerPage=0;render()">
+          <option value="">All Types</option>
+          <option value="credit">Credits</option>
+          <option value="debit">Payouts</option>
+        </select>
+        <button class="btn btn-primary" onclick="FleetDB.openModal('payoutModal')">⇄ Issue Payout</button>
+      </div>
+    </div>
+
+    <!-- Balance card -->
+    <div class="ledger-balance-card" id="balanceCard">
+      <div class="ledger-balance-label">Total Vendor Liability</div>
+      <div class="ledger-balance-amount" id="totalLiability">—</div>
+      <div class="ledger-balance-meta">
+        <div><div class="ledger-balance-stat-label">Lifetime Credits</div><div class="ledger-balance-stat-value" id="lifetimeCredits">—</div></div>
+        <div><div class="ledger-balance-stat-label">Lifetime Payouts</div><div class="ledger-balance-stat-value" id="lifetimePaid">—</div></div>
+        <div><div class="ledger-balance-stat-label">Transactions</div><div class="ledger-balance-stat-value" id="txCount">—</div></div>
+      </div>
+    </div>
+
+    <!-- Vendor mini cards -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:24px;" id="vendorMinis"></div>
+
+    <!-- Date range -->
+    <div class="ledger-filter-row" style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;">
+      <div class="topbar-search" style="flex:1;min-width:160px;max-width:260px;"><span class="search-icon">⌕</span><input type="text" placeholder="Search…" id="lSearch" aria-label="Search ledger"/></div>
+      <input type="date" class="form-input" style="height:32px;width:140px;" id="dFrom"/>
+      <span style="color:var(--text-muted);line-height:32px;font-size:12px;">to</span>
+      <input type="date" class="form-input" style="height:32px;width:140px;" id="dTo"/>
+      <button class="btn btn-secondary btn-sm" onclick="ledgerPage=0;render()">Filter</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearFilters()">Clear</button>
+      <div style="margin-left:auto;font-size:13px;color:var(--text-secondary);">
+        <span id="rowCount" style="font-weight:600;color:var(--text-primary);">—</span> entries
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Date</th><th>Vendor</th><th>Description</th><th>Type</th><th style="text-align:right;">Credit</th><th style="text-align:right;">Debit</th><th style="text-align:right;">Running Bal.</th><th>Ref</th></tr></thead>
+        <tbody id="ledgerBody"></tbody>
+      </table>
+    </div>
+    <div id="ledgerPager"></div>
+  </main>
+</div>
+<nav class="mobile-nav" id="mobileNav"></nav>
+
+<!-- Payout Modal -->
+<div class="modal-overlay" id="payoutModal">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header"><div class="modal-title">Issue Payout</div><button class="icon-btn" onclick="FleetDB.closeModal('payoutModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Vendor <span class="required">*</span></label>
+        <select class="form-select" id="npVendor" onchange="updatePayBal()">
+          <option value="">— Select —</option>
+        </select>
+      </div>
+      <div id="npBal" style="display:none;padding:14px 16px;border-radius:var(--r-md);background:var(--accent-subtle);border:1px solid var(--accent-border);margin-bottom:16px;">
+        <div style="font-size:11px;color:var(--accent);">Available Balance</div>
+        <div class="mono fw-bold" style="font-size:26px;color:var(--accent);" id="npBalAmt">—</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Amount <span class="required">*</span></label><div class="input-group"><span class="input-prefix">₨</span><input type="number" class="form-input" id="npAmt"/></div></div>
+        <div class="form-group"><label class="form-label">Method</label><select class="form-select" id="npMethod"><option>Bank Transfer</option><option>Cash</option><option>Cheque</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="npDate"/></div>
+        <div class="form-group"><label class="form-label">Notes</label><input type="text" class="form-input" id="npNotes" placeholder="Ref…"/></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="FleetDB.closeModal('payoutModal')">Cancel</button>
+      <button class="btn btn-primary" style="background:var(--emerald);" onclick="confirmPayout()">✓ Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase (cloud sync + auth) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-sync.js"></script>
+<script src="data.js"></script>
+<script>
+FleetDB.init('ledger.html');
+document.getElementById('npDate').value = FleetDB.today();
+const PAGE_SIZE = 50;
+let ledgerPage = 0;
+function gotoLedgerPage(p) { ledgerPage = p; render(); }
+
+// Populate vendor filter selects
+function populateVendorSelects() {
+  FleetDB.getVendors().forEach(v => {
+    ['vendorF','npVendor'].forEach(selId => {
+      const o = document.createElement('option'); o.value = v.id; o.textContent = v.name;
+      document.getElementById(selId).appendChild(o);
+    });
+  });
+}
+
+/* Build ledger rows from trips + payouts */
+function buildLedgerRows(vendorId) {
+  const rows = [];
+  const vendors = vendorId ? [FleetDB.getVendor(vendorId)] : FleetDB.getVendors();
+  const vehicles = FleetDB.getVehicles();
+
+  vendors.filter(Boolean).forEach(v => {
+    // Credits (trips)
+    FleetDB.getTrips().filter(t => t.vendorId === v.id && t.status !== 'cancelled').forEach(t => {
+      const vh = vehicles.find(x => x.id === t.vehicleId);
+      rows.push({ date: t.date, vendorId: v.id, vendorName: v.name, vendorColor: v.color,
+        desc: 'Trip earnings — ' + (vh ? vh.plate : t.vehicleId), type:'credit', amount: t.net || 0, ref: t.id });
+    });
+    // Debits (payouts)
+    FleetDB.getPayouts().filter(p => p.vendorId === v.id).forEach(p => {
+      rows.push({ date: p.date, vendorId: v.id, vendorName: v.name, vendorColor: v.color,
+        desc: 'Payout — ' + p.method + (p.notes ? ' · ' + p.notes : ''), type:'debit', amount: p.amount || 0, ref: p.id });
+    });
+  });
+
+  rows.sort((a,b) => a.date.localeCompare(b.date)); // oldest-first
+
+  // Running balance per vendor — accumulates forward from 0
+  const balMap = {};
+  rows.forEach(r => {
+    balMap[r.vendorId] = (balMap[r.vendorId] || 0) + (r.type === 'credit' ? r.amount : -r.amount);
+    r.runningBal = balMap[r.vendorId];
+  });
+
+  return rows;
+}
+
+function render() {
+  const vendorId = document.getElementById('vendorF').value;
+  const typeF    = document.getElementById('typeF').value;
+  const q        = (document.getElementById('lSearch').value||'').toLowerCase();
+  const dFrom    = document.getElementById('dFrom').value;
+  const dTo      = document.getElementById('dTo').value;
+
+  let rows = buildLedgerRows(vendorId).filter(r =>
+    (!typeF || r.type === typeF) &&
+    (!q || r.vendorName.toLowerCase().includes(q) || r.desc.toLowerCase().includes(q) || r.ref.toLowerCase().includes(q)) &&
+    (!dFrom || r.date >= dFrom) && (!dTo || r.date <= dTo)
+  );
+
+  // Header stats
+  const allVendors = FleetDB.getVendors();
+  const totalLiab  = allVendors.reduce((s,v) => s + Math.max(0, FleetDB.getVendorBalance(v.id)), 0);
+  const allTrips   = FleetDB.getTrips().filter(t => t.status !== 'cancelled');
+  const lifetimeC  = allTrips.reduce((s,t) => s + (t.net||0), 0);
+  const lifetimeP  = FleetDB.getPayouts().reduce((s,p) => s + (p.amount||0), 0);
+  document.getElementById('totalLiability').textContent = FleetDB.fmtMoney(totalLiab);
+  document.getElementById('lifetimeCredits').textContent = FleetDB.fmtMoney(lifetimeC);
+  document.getElementById('lifetimePaid').textContent   = FleetDB.fmtMoney(lifetimeP);
+  document.getElementById('txCount').textContent = rows.length;
+  document.getElementById('rowCount').textContent = rows.length;
+
+  // Vendor minis
+  document.getElementById('vendorMinis').innerHTML = allVendors.map(v => {
+    const bal = FleetDB.getVendorBalance(v.id);
+    return `<div class="card" style="padding:14px;cursor:pointer;border:1px solid var(--border);" onclick="document.getElementById('vendorF').value='${v.id}';render();">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <div style="width:24px;height:24px;border-radius:4px;background:${v.color}33;color:${v.color};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;">${FleetDB.escapeHtml(v.name[0])}</div>
+        <span style="font-size:12px;font-weight:600;">${FleetDB.escapeHtml(v.name)}</span>
+      </div>
+      <div class="mono fw-bold" style="font-size:16px;color:${bal>100000?'var(--amber)':'var(--text-primary)'};">${FleetDB.fmtMoney(bal)}</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Current balance</div>
+    </div>`;
+  }).join('');
+
+  // Table
+  const ledgerDisplay = rows.slice(ledgerPage * PAGE_SIZE, (ledgerPage + 1) * PAGE_SIZE);
+  document.getElementById('ledgerBody').innerHTML = ledgerDisplay.map(r => `<tr>
+    <td class="td-mono">${r.date}</td>
+    <td>
+      <div style="display:flex;align-items:center;gap:7px;">
+        <div style="width:20px;height:20px;border-radius:3px;background:${r.vendorColor}33;color:${r.vendorColor};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;">${FleetDB.escapeHtml(r.vendorName[0])}</div>
+        <span style="font-size:13px;">${FleetDB.escapeHtml(r.vendorName)}</span>
+      </div>
+    </td>
+    <td style="font-size:12px;color:var(--text-secondary);max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${FleetDB.escapeHtml(r.desc)}</td>
+    <td><span class="badge ${r.type==='credit'?'badge-teal':'badge-red'}">${r.type==='credit'?'Credit':'Payout'}</span></td>
+    <td style="text-align:right;" class="td-amount ${r.type==='credit'?'positive':''}">${r.type==='credit'?'PKR '+r.amount.toLocaleString():'—'}</td>
+    <td style="text-align:right;" class="td-amount ${r.type==='debit'?'negative':''}">${r.type==='debit'?'PKR '+r.amount.toLocaleString():'—'}</td>
+    <td style="text-align:right;" class="td-amount">PKR ${r.runningBal.toLocaleString()}</td>
+    <td class="td-mono">${r.ref}</td>
+  </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-muted);">No transactions</td></tr>';
+  document.getElementById('ledgerPager').innerHTML = FleetDB.pagerHTML(rows.length, ledgerPage, PAGE_SIZE, 'gotoLedgerPage');
+}
+
+function clearFilters() {
+  ['vendorF','typeF','lSearch'].forEach(id => document.getElementById(id).value='');
+  ['dFrom','dTo'].forEach(id => document.getElementById(id).value='');
+  render();
+}
+
+function updatePayBal() {
+  const id = document.getElementById('npVendor').value;
+  const banner = document.getElementById('npBal');
+  if (!id) { banner.style.display='none'; return; }
+  const bal = FleetDB.getVendorBalance(id);
+  document.getElementById('npBalAmt').textContent = FleetDB.fmtMoney(bal);
+  document.getElementById('npAmt').value = Math.max(0, bal);
+  banner.style.display = 'block';
+}
+
+function confirmPayout() {
+  const id  = document.getElementById('npVendor').value;
+  const amt = parseFloat(document.getElementById('npAmt').value) || 0;
+  if (!id)  { FleetDB.showToast('Select a vendor', 'error'); return; }
+  if (!amt) { FleetDB.showToast('Enter amount', 'error'); return; }
+  FleetDB.addPayout({ vendorId:id, amount:amt, method:document.getElementById('npMethod').value, date:document.getElementById('npDate').value||FleetDB.today(), notes:document.getElementById('npNotes').value });
+  FleetDB.closeModal('payoutModal');
+  FleetDB.showToast('Payout recorded — ' + FleetDB.fmtMoney(amt));
+  render();
+}
+
+document.getElementById('lSearch').oninput = FleetDB.debounce(() => { ledgerPage = 0; render(); }, 280);
+populateVendorSelects();
+render();
+</script>
+</body>
+</html>

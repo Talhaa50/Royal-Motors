@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Driver Salary — Royal Motors</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar" id="topbar"></header>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <nav class="sidebar" id="sidebar"></nav>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Driver Salary</div>
+        <div class="page-subtitle" id="salSubtitle">Monthly salary management</div>
+      </div>
+      <div class="page-actions">
+        <input type="month" class="form-select" style="width:160px;height:34px;padding:0 10px;" id="monthSel" onchange="renderAll()"/>
+        <button class="btn btn-secondary" onclick="FleetDB.openModal('advanceModal')">₨ Issue Advance</button>
+        <button class="btn btn-primary" onclick="openPayModal()">+ Record Payment</button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid-4 mb-5" id="salStats"></div>
+
+    <!-- Monthly Status Table -->
+    <div class="card mb-5">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Monthly Salary Status</div>
+          <div class="card-subtitle" id="monthLabel">—</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <select class="form-select" style="width:130px;height:32px;" id="statusFilter" onchange="renderAll()">
+            <option value="">All Drivers</option>
+            <option value="unpaid">Unpaid Only</option>
+            <option value="paid">Paid Only</option>
+          </select>
+        </div>
+      </div>
+      <div class="card-body" style="padding:0;">
+        <div class="table-wrap" style="margin:0;border:none;">
+          <table>
+            <thead><tr>
+              <th>Driver</th><th>Vehicle</th><th>Base Salary</th>
+              <th>Status</th><th>Paid Date</th><th>Method</th><th>Amount Paid</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="salaryBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Driver Advances -->
+    <div class="card mb-5">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Driver Advances</div>
+          <div class="card-subtitle">Cash advances issued to drivers</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <select class="form-select" style="width:160px;height:32px;" id="advDriverFilter" onchange="advPage=0;renderAdvances()">
+            <option value="">All Drivers</option>
+          </select>
+          <select class="form-select" style="width:120px;height:32px;" id="advStatusFilter" onchange="advPage=0;renderAdvances()">
+            <option value="">All</option>
+            <option value="pending">Pending</option>
+            <option value="settled">Settled</option>
+          </select>
+        </div>
+      </div>
+      <div id="advanceSummaryCards" style="display:flex;gap:12px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--border);"></div>
+      <div class="card-body" style="padding:0;">
+        <div class="table-wrap" style="margin:0;border:none;">
+          <table>
+            <thead><tr>
+              <th>Ref</th><th>Driver</th><th>Amount</th><th>Date</th><th>Reason</th><th>Status</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="advanceBody"></tbody>
+          </table>
+        </div>
+        <div id="advPager" style="padding:0 16px;"></div>
+      </div>
+    </div>
+
+    <!-- Payment History -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Payment History</div>
+        <div style="display:flex;gap:8px;">
+          <select class="form-select" style="width:160px;height:32px;" id="histDriverFilter" onchange="histPage=0;renderHistory()">
+            <option value="">All Drivers</option>
+          </select>
+        </div>
+      </div>
+      <div class="card-body" style="padding:0;">
+        <div class="table-wrap" style="margin:0;border:none;">
+          <table>
+            <thead><tr>
+              <th>Ref</th><th>Month</th><th>Driver</th><th>Amount</th>
+              <th>Method</th><th>Paid Date</th><th>Notes</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+        <div id="histPager" style="padding:0 16px;"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<nav class="mobile-nav" id="mobileNav"></nav>
+
+<!-- Issue Advance Modal -->
+<div class="modal-overlay" id="advanceModal">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header">
+      <div class="modal-title">Issue Driver Advance</div>
+      <button class="icon-btn" onclick="FleetDB.closeModal('advanceModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Driver <span class="required">*</span></label>
+          <select class="form-select" id="advDriver"><option value="">Select driver…</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Amount (PKR) <span class="required">*</span></label>
+          <div class="input-group"><span class="input-prefix">₨</span>
+            <input type="number" class="form-input" id="advAmount" placeholder="0" min="1"/>
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Date</label>
+          <input type="date" class="form-input" id="advDate"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Reason / Notes</label>
+          <input type="text" class="form-input" id="advReason" placeholder="e.g. Personal emergency"/>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="FleetDB.closeModal('advanceModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAdvance()">Issue Advance</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pay Salary Modal -->
+<div class="modal-overlay" id="payModal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <div class="modal-title" id="payModalTitle">Record Salary Payment</div>
+      <button class="icon-btn" onclick="FleetDB.closeModal('payModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Driver <span class="required">*</span></label>
+          <select class="form-select" id="pDriverId" onchange="autoFillSalary()">
+            <option value="">Select driver…</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Month <span class="required">*</span></label>
+          <input type="month" class="form-input" id="pMonth"/>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Amount (PKR) <span class="required">*</span></label>
+          <div class="input-group"><span class="input-prefix">₨</span>
+            <input type="number" class="form-input" id="pAmount" placeholder="0"/>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Payment Method</label>
+          <select class="form-select" id="pMethod">
+            <option value="Cash">Cash</option>
+            <option value="Bank Transfer">Bank Transfer</option>
+            <option value="Easypaisa">Easypaisa</option>
+            <option value="JazzCash">JazzCash</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Payment Date</label>
+          <input type="date" class="form-input" id="pDate"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <input type="text" class="form-input" id="pNotes" placeholder="e.g. June salary advance"/>
+        </div>
+      </div>
+      <div id="dupWarning" style="display:none;background:var(--amber-subtle,rgba(233,196,106,.15));border:1px solid var(--amber);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--amber);margin-top:4px;">
+        ⚠ A salary payment already exists for this driver and month.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="FleetDB.closeModal('payModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSalaryPayment()">Save Payment</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase (cloud sync + auth) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-sync.js"></script>
+<script src="data.js"></script>
+<script>
+FleetDB.init('salary.html');
+const PAGE_SIZE = 50;
+let histPage = 0, advPage = 0;
+function gotoHistPage(p) { histPage = p; renderHistory(); }
+function gotoAdvPage(p)  { advPage  = p; renderAdvances(); }
+
+/* ── Initialise month picker to current month ── */
+(function() {
+  const today = new Date();
+  const m = today.toISOString().slice(0, 7);
+  document.getElementById('monthSel').value = m;
+  document.getElementById('pMonth').value   = m;
+  document.getElementById('pDate').value    = FleetDB.today();
+})();
+
+/* ── Populate driver dropdowns ── */
+function populateDriverDropdowns() {
+  const drivers = FleetDB.getDrivers();
+  const E = FleetDB.escapeHtml;
+  const payOpts = drivers.map(d =>
+    `<option value="${d.id}">${E(d.name)} (${E(d.status)})</option>`).join('');
+  document.getElementById('pDriverId').innerHTML =
+    '<option value="">Select driver…</option>' + payOpts;
+
+  const histOpts = drivers.map(d =>
+    `<option value="${d.id}">${E(d.name)}</option>`).join('');
+  document.getElementById('histDriverFilter').innerHTML =
+    '<option value="">All Drivers</option>' + histOpts;
+}
+populateDriverDropdowns();
+populateAdvanceDriverDropdowns();
+
+/* ── Auto-fill salary amount when driver selected ── */
+function autoFillSalary() {
+  const id = document.getElementById('pDriverId').value;
+  const month = document.getElementById('pMonth').value;
+  const driver = FleetDB.getDrivers().find(d => d.id === id);
+  if (driver) {
+    document.getElementById('pAmount').value = driver.salary || '';
+  }
+  checkDuplicate();
+}
+
+function checkDuplicate() {
+  const id    = document.getElementById('pDriverId').value;
+  const month = document.getElementById('pMonth').value;
+  const warn  = document.getElementById('dupWarning');
+  if (!id || !month) { warn.style.display='none'; return; }
+  const { paid } = FleetDB.getDriverSalaryStatus(id, month);
+  warn.style.display = paid ? 'block' : 'none';
+}
+
+document.getElementById('pMonth').addEventListener('change', checkDuplicate);
+
+/* ── Populate advance driver dropdowns ── */
+function populateAdvanceDriverDropdowns() {
+  const drivers = FleetDB.getDrivers();
+  const E = FleetDB.escapeHtml;
+  const opts = drivers.map(d => `<option value="${d.id}">${E(d.name)}</option>`).join('');
+  document.getElementById('advDriver').innerHTML = '<option value="">Select driver…</option>' + opts;
+  document.getElementById('advDriverFilter').innerHTML = '<option value="">All Drivers</option>' + opts;
+  document.getElementById('advDate').value = FleetDB.today();
+}
+
+/* ── Main render ── */
+function renderAll() {
+  renderStats();
+  renderSalaryTable();
+  renderAdvances();
+  renderHistory();
+}
+
+function renderStats() {
+  const month   = document.getElementById('monthSel').value;
+  const drivers = FleetDB.getDrivers().filter(d => d.status === 'active');
+  const payments = FleetDB.getSalaryPayments().filter(p => p.month === month);
+
+  const totalPayroll = drivers.reduce((s, d) => s + (d.salary || 0), 0);
+  const totalPaid    = payments.reduce((s, p) => s + (p.amount || 0), 0);
+  const paidCount    = new Set(payments.map(p => p.driverId)).size;
+  const unpaidCount  = drivers.length - paidCount;
+
+  const [y, mo] = month.split('-');
+  const monthName = new Date(+y, +mo - 1, 1).toLocaleDateString('en-US', { month:'long', year:'numeric' });
+  document.getElementById('salSubtitle').textContent = monthName;
+  document.getElementById('monthLabel').textContent  = monthName;
+
+  document.getElementById('salStats').innerHTML = [
+    ['Total Active Drivers', drivers.length, ''],
+    ['Monthly Payroll',      FleetDB.fmtMoney(totalPayroll), 'color:var(--amber)'],
+    ['Paid This Month',      `${paidCount} drivers · ${FleetDB.fmtMoney(totalPaid)}`, 'color:var(--emerald)'],
+    ['Pending Payment',      unpaidCount + ' drivers', unpaidCount > 0 ? 'color:var(--red)' : 'color:var(--text-muted)'],
+  ].map(([l, v, s]) => `<div class="card" style="padding:14px;">
+    <div style="font-size:10px;color:var(--text-muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:5px;">${l}</div>
+    <div style="font-size:18px;font-weight:700;${s}">${v}</div>
+  </div>`).join('');
+}
+
+function renderSalaryTable() {
+  const month    = document.getElementById('monthSel').value;
+  const filter   = document.getElementById('statusFilter').value;
+  const vehicles = FleetDB.getVehicles();
+  let drivers    = FleetDB.getDrivers().filter(d => d.status === 'active');
+
+  if (filter === 'paid')   drivers = drivers.filter(d => FleetDB.getDriverSalaryStatus(d.id, month).paid);
+  if (filter === 'unpaid') drivers = drivers.filter(d => !FleetDB.getDriverSalaryStatus(d.id, month).paid);
+
+  document.getElementById('salaryBody').innerHTML = drivers.map(d => {
+    const assignedVeh = vehicles.find(v => v.driverId === d.id);
+    const { paid, payment } = FleetDB.getDriverSalaryStatus(d.id, month);
+    const methodBadge = payment ? `<span class="badge badge-muted" style="font-size:10px;">${payment.method}</span>` : '—';
+    const paidAmt     = payment ? `<span class="td-amount">${FleetDB.fmtMoney(payment.amount)}</span>` : '—';
+    const paidDate    = payment ? payment.paidDate : '—';
+    const actions     = paid
+      ? `<button class="btn btn-secondary btn-sm" style="color:var(--red);" onclick="undoPayment('${payment.id}')">Undo</button>`
+      : `<button class="btn btn-primary btn-sm" onclick="quickPay('${d.id}')">Pay ₨${(d.salary||0).toLocaleString()}</button>`;
+
+    const E = FleetDB.escapeHtml;
+    return `<tr>
+      <td style="font-weight:600;font-size:13px;">${E(d.name)}</td>
+      <td class="td-mono" style="font-size:12px;">${assignedVeh ? E(assignedVeh.plate) : '<span style="color:var(--text-muted);">None</span>'}</td>
+      <td class="td-amount">${d.salary ? FleetDB.fmtMoney(d.salary) : '—'}</td>
+      <td><span class="badge ${paid ? 'badge-green' : 'badge-red'}">${paid ? 'Paid' : 'Unpaid'}</span></td>
+      <td class="td-mono" style="font-size:12px;">${paidDate}</td>
+      <td>${methodBadge}</td>
+      <td>${paidAmt}</td>
+      <td>${actions}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-muted);">No active drivers</td></tr>';
+}
+
+function renderHistory() {
+  const driverFilter = document.getElementById('histDriverFilter').value;
+  const drivers      = FleetDB.getDrivers();
+  let payments       = FleetDB.getSalaryPayments();
+  if (driverFilter) payments = payments.filter(p => p.driverId === driverFilter);
+
+  const histDisplay = payments.slice(histPage * PAGE_SIZE, (histPage + 1) * PAGE_SIZE);
+  document.getElementById('historyBody').innerHTML = histDisplay.map(p => {
+    const driver = drivers.find(d => d.id === p.driverId);
+    const [y, mo] = p.month.split('-');
+    const monthName = new Date(+y, +mo - 1, 1).toLocaleDateString('en-US', { month:'long', year:'numeric' });
+    return `<tr>
+      <td class="td-mono" style="font-size:11px;color:var(--text-muted);">${p.id}</td>
+      <td style="font-size:13px;font-weight:500;">${monthName}</td>
+      <td style="font-size:13px;">${FleetDB.escapeHtml(driver ? driver.name : p.driverId)}</td>
+      <td class="td-amount">${FleetDB.fmtMoney(p.amount)}</td>
+      <td><span class="badge badge-muted" style="font-size:10px;">${FleetDB.escapeHtml(p.method)}</span></td>
+      <td class="td-mono" style="font-size:12px;">${FleetDB.escapeHtml(p.paidDate)}</td>
+      <td style="font-size:12px;color:var(--text-secondary);">${FleetDB.escapeHtml(p.notes || '—')}</td>
+      <td><button class="btn btn-secondary btn-sm" style="color:var(--red);" onclick="deletePayment('${p.id}')">Delete</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-muted);">No payment records yet</td></tr>';
+  document.getElementById('histPager').innerHTML = FleetDB.pagerHTML(payments.length, histPage, PAGE_SIZE, 'gotoHistPage');
+}
+
+/* ── Advances ── */
+function renderAdvances() {
+  const dFilter = document.getElementById('advDriverFilter').value;
+  const sFilter = document.getElementById('advStatusFilter').value;
+  const drivers = FleetDB.getDrivers();
+
+  let advances = FleetDB.getAdvances();
+  if (dFilter) advances = advances.filter(a => a.driverId === dFilter);
+  if (sFilter) advances = advances.filter(a => a.status  === sFilter);
+
+  // Summary cards — pending totals per driver
+  const pending = FleetDB.getAdvances().filter(a => a.status === 'pending');
+  const driverPending = {};
+  pending.forEach(a => { driverPending[a.driverId] = (driverPending[a.driverId] || 0) + a.amount; });
+  const summaryCards = Object.entries(driverPending).map(([dId, amt]) => {
+    const d = drivers.find(x => x.id === dId);
+    return `<div style="background:var(--amber-subtle);border:1px solid var(--amber-border);border-radius:var(--r-md);padding:8px 14px;min-width:140px;">
+      <div style="font-size:10px;color:var(--amber);text-transform:uppercase;font-weight:600;letter-spacing:.4px;">${FleetDB.escapeHtml(d ? d.name : dId)}</div>
+      <div style="font-size:15px;font-weight:700;color:var(--amber);font-family:var(--mono);margin-top:2px;">PKR ${amt.toLocaleString()}</div>
+      <div style="font-size:10px;color:var(--text-muted);">pending</div>
+    </div>`;
+  }).join('');
+  document.getElementById('advanceSummaryCards').innerHTML = summaryCards ||
+    '<div style="font-size:12px;color:var(--text-muted);padding:4px 0;">No pending advances ✓</div>';
+
+  const advDisplay = advances.slice(advPage * PAGE_SIZE, (advPage + 1) * PAGE_SIZE);
+  document.getElementById('advanceBody').innerHTML = advDisplay.map(a => {
+    const d = drivers.find(x => x.id === a.driverId);
+    const isPending = a.status === 'pending';
+    return `<tr>
+      <td class="td-mono" style="font-size:11px;color:var(--text-muted);">${a.id}</td>
+      <td style="font-weight:600;font-size:13px;">${FleetDB.escapeHtml(d ? d.name : a.driverId)}</td>
+      <td class="td-amount" style="color:var(--amber);">PKR ${(a.amount||0).toLocaleString()}</td>
+      <td class="td-mono" style="font-size:12px;">${a.date}</td>
+      <td style="font-size:12px;color:var(--text-secondary);">${FleetDB.escapeHtml(a.reason || '—')}</td>
+      <td><span class="badge ${isPending ? 'badge-amber' : 'badge-green'}">${isPending ? 'Pending' : 'Settled'}</span></td>
+      <td>
+        <div style="display:flex;gap:5px;">
+          ${isPending ? `<button class="btn btn-primary btn-sm" onclick="settleAdv('${a.id}')">✓ Settle</button>` : ''}
+          <button class="btn btn-secondary btn-sm" style="color:var(--red);" onclick="deleteAdv('${a.id}')">Del</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-muted);">No advances found</td></tr>';
+  document.getElementById('advPager').innerHTML = FleetDB.pagerHTML(advances.length, advPage, PAGE_SIZE, 'gotoAdvPage');
+}
+
+function saveAdvance() {
+  const driverId = document.getElementById('advDriver').value;
+  const amount   = parseFloat(document.getElementById('advAmount').value);
+  if (!driverId) { FleetDB.showToast('Select a driver', 'error'); return; }
+  if (!amount || amount <= 0) { FleetDB.showToast('Enter a valid amount', 'error'); return; }
+  FleetDB.addAdvance({
+    driverId, amount,
+    date:   document.getElementById('advDate').value || FleetDB.today(),
+    reason: document.getElementById('advReason').value.trim(),
+  });
+  FleetDB.closeModal('advanceModal');
+  FleetDB.showToast('Advance issued — PKR ' + amount.toLocaleString());
+  document.getElementById('advAmount').value = '';
+  document.getElementById('advReason').value = '';
+  renderAdvances();
+}
+
+function settleAdv(id) {
+  if (!confirm('Mark this advance as settled?')) return;
+  FleetDB.settleAdvance(id);
+  FleetDB.showToast('Advance marked as settled');
+  renderAdvances();
+}
+function deleteAdv(id) {
+  if (!confirm('Delete this advance record?')) return;
+  FleetDB.deleteAdvance(id);
+  FleetDB.showToast('Advance deleted', 'error');
+  renderAdvances();
+}
+
+/* ── Quick Pay (pre-fills modal with driver + current month) ── */
+function quickPay(driverId) {
+  const month = document.getElementById('monthSel').value;
+  openPayModal(driverId, month);
+}
+
+/* ── Open Pay Modal ── */
+function openPayModal(driverId, month) {
+  document.getElementById('pDriverId').value = driverId || '';
+  document.getElementById('pMonth').value    = month || document.getElementById('monthSel').value;
+  document.getElementById('pDate').value     = FleetDB.today();
+  document.getElementById('pNotes').value    = '';
+  document.getElementById('pMethod').value   = 'Cash';
+  document.getElementById('dupWarning').style.display = 'none';
+  if (driverId) autoFillSalary();
+  FleetDB.openModal('payModal');
+}
+
+/* ── Save Payment ── */
+function saveSalaryPayment() {
+  const driverId = document.getElementById('pDriverId').value;
+  const month    = document.getElementById('pMonth').value;
+  const amount   = parseFloat(document.getElementById('pAmount').value);
+
+  if (!driverId) { FleetDB.showToast('Select a driver', 'error'); return; }
+  if (!month)    { FleetDB.showToast('Select a month', 'error'); return; }
+  if (!amount || amount <= 0) { FleetDB.showToast('Enter a valid amount', 'error'); return; }
+
+  const { paid } = FleetDB.getDriverSalaryStatus(driverId, month);
+  if (paid) { FleetDB.showToast('Salary already recorded for this driver and month', 'error'); return; }
+
+  FleetDB.addSalaryPayment({
+    driverId,
+    month,
+    amount,
+    method:   document.getElementById('pMethod').value,
+    paidDate: document.getElementById('pDate').value || FleetDB.today(),
+    notes:    document.getElementById('pNotes').value.trim(),
+  });
+
+  FleetDB.closeModal('payModal');
+  FleetDB.showToast('Salary payment recorded');
+  renderAll();
+}
+
+/* ── Undo / Delete ── */
+function undoPayment(id) {
+  if (!confirm('Remove this salary payment record?')) return;
+  FleetDB.deleteSalaryPayment(id);
+  FleetDB.showToast('Payment removed', 'error');
+  renderAll();
+}
+
+function deletePayment(id) {
+  if (!confirm('Delete this payment record permanently?')) return;
+  FleetDB.deleteSalaryPayment(id);
+  FleetDB.showToast('Payment deleted', 'error');
+  renderAll();
+}
+
+renderAll();
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl *)",
+      "Bash(Remove-Item *)",
+      "PowerShell(Remove-Item *)",
+      "Bash(gh auth *)",
+      "Bash(git *)"
+    ]
+  }
+}

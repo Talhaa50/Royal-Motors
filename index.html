@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Dashboard — Royal Motors</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"/>
+  <link rel="stylesheet" href="styles.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar" id="topbar"></header>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <nav class="sidebar" id="sidebar"></nav>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Dashboard</div>
+        <div class="page-subtitle" id="pageSubtitle">Loading…</div>
+      </div>
+      <div class="page-actions">
+        <select class="form-select" style="width:160px;height:34px;" id="periodSel" onchange="loadDashboard()">
+          <option value="1">Today</option>
+          <option value="7">Last 7 Days</option>
+          <option value="30" selected>Last 30 Days</option>
+          <option value="90">Last 90 Days</option>
+        </select>
+        <button class="btn btn-secondary">⬇ Export</button>
+        <a href="dispatch.html" class="btn btn-primary">+ New Duty</a>
+      </div>
+    </div>
+
+    <!-- KPI Grid -->
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <!-- Alerts -->
+    <div class="alerts-panel" id="alertsPanel"></div>
+
+    <!-- Charts row 1 -->
+    <div class="charts-grid mb-5">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Revenue &amp; Commission Trend</div>
+            <div class="card-subtitle" id="chartSubtitle">Last 30 days</div>
+          </div>
+          <div style="display:flex;gap:14px;align-items:center;">
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);">
+              <div style="width:10px;height:3px;background:var(--accent);border-radius:2px;"></div>Revenue
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);">
+              <div style="width:10px;height:3px;background:var(--amber);border-radius:2px;"></div>Commission
+            </div>
+          </div>
+        </div>
+        <div class="card-body"><canvas id="revenueChart" height="180"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Vehicle Leaderboard</div></div>
+        <div class="card-body" id="vehicleLeaderboard"></div>
+      </div>
+    </div>
+
+    <!-- Charts row 2 -->
+    <div class="grid-2 mb-5">
+      <div class="card">
+        <div class="card-header">
+          <div><div class="card-title">Vendor Liability Trend</div><div class="card-subtitle">Accumulated unpaid balance</div></div>
+          <span class="badge badge-amber" id="liabilityBadge">—</span>
+        </div>
+        <div class="card-body"><canvas id="liabilityChart" height="160"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Driver Utilization</div></div>
+        <div class="card-body" id="driverUtilization"></div>
+      </div>
+    </div>
+
+    <!-- Bottom row -->
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Top Vendors</div>
+          <a href="vendors.html" class="btn btn-ghost btn-sm">View All →</a>
+        </div>
+        <div class="card-body" id="topVendors"></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Recent Duties</div>
+          <a href="trips.html" class="btn btn-ghost btn-sm">View All →</a>
+        </div>
+        <div class="card-body" id="recentTrips"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<nav class="mobile-nav" id="mobileNav"></nav>
+
+<!-- Firebase (cloud sync + auth) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-sync.js"></script>
+<script src="data.js"></script>
+<script>
+FleetDB.init('index.html');
+
+let revChart, liabChart;
+
+function loadDashboard() {
+  const days = parseInt(document.getElementById('periodSel').value) || 30;
+  document.getElementById('pageSubtitle').textContent =
+    'Overview · ' + new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  document.getElementById('chartSubtitle').textContent = days === 1 ? 'Today' : 'Last ' + days + ' days';
+
+  const stats = FleetDB.getDashboardStats(days);
+  renderKPIs(stats, days);
+  renderAlerts(stats);
+  renderRevenueChart(days);
+  renderLiabilityChart();
+  renderDriverUtil(days);
+  renderTopVendors();
+  renderRecentTrips();
+}
+
+/* ── KPI Cards ── */
+function renderKPIs(s, days) {
+  const prev = FleetDB.getDashboardStats(days * 2);
+
+  const trendOf = (cur, total2x) => {
+    const p = total2x - cur;
+    if (p === 0 && cur === 0) return { val: '—', cls: 'neutral' };
+    if (p === 0) return { val: 'New', cls: 'up' };
+    const pct = (cur - p) / Math.abs(p) * 100;
+    return { val: (pct >= 0 ? '↑ ' : '↓ ') + Math.abs(pct).toFixed(1) + '%', cls: pct >= 0 ? 'up' : 'down' };
+  };
+
+  const kpis = [
+    { label:'Total Revenue',      value:FleetDB.fmtMoney(s.totalRevenue),   trend:trendOf(s.totalRevenue,  prev.totalRevenue),  icon:'💰', iconBg:'var(--accent-subtle)',   iconColor:'var(--accent)' },
+    { label:'Gross Commission',   value:FleetDB.fmtMoney(s.totalComm),      trend:trendOf(s.totalComm,     prev.totalComm),      icon:'📊', iconBg:'var(--amber-subtle)',    iconColor:'var(--amber)' },
+    { label:'Net Profit',         value:FleetDB.fmtMoney(s.netProfit),      trend:trendOf(s.netProfit,     prev.netProfit),       icon:'✦',  iconBg:'var(--emerald-subtle)', iconColor:'var(--emerald)' },
+    { label:'Vendor Liability',   value:FleetDB.fmtMoney(s.totalLiability), trend:{val:'Needs attention',cls:'down'},             icon:'⚠',  iconBg:'var(--red-subtle)',     iconColor:'var(--red)', valueColor:'var(--red)' },
+    { label:'Active Vehicles',    value:s.activeVeh + ' / ' + s.totalVeh,  trend:{val:'Fleet',cls:'neutral'},                   icon:'▣',  iconBg:'var(--blue-subtle)',    iconColor:'var(--blue)' },
+    { label:'Driver Utilization', value:s.avgUtil + '%',                    trend:{val:'Avg',cls:'neutral'},                     icon:'◈',  iconBg:'var(--purple-subtle)',  iconColor:'var(--purple)' },
+  ];
+
+  document.getElementById('kpiGrid').innerHTML = kpis.map((k, i) => `
+    <div class="kpi-card">
+      <div class="kpi-header">
+        <div class="kpi-label">${k.label}</div>
+        <div class="kpi-icon" style="background:${k.iconBg};color:${k.iconColor};">${k.icon}</div>
+      </div>
+      <div class="kpi-value" ${k.valueColor ? `style="color:${k.valueColor}"` : ''}>${k.value}</div>
+      <div class="kpi-meta">
+        <span class="kpi-trend ${k.trend.cls}">${k.trend.val}</span>
+        <span class="kpi-period">vs prev period</span>
+      </div>
+      <div class="sparkline" id="sp${i}"></div>
+    </div>`).join('');
+
+  // Build real sparkline data from actual trip history
+  const byDay      = FleetDB.getTripsByDay(days);
+  const dayKeys    = Object.keys(byDay);
+  const dayVals    = Object.values(byDay);
+  const vendors    = FleetDB.getVendors();
+  const allTrips   = FleetDB.getTrips().filter(t => t.status !== 'cancelled');
+  const allPay     = FleetDB.getPayouts();
+  const minDay     = dayKeys[0] || '';
+
+  // Active vehicles / drivers per day
+  const vehSets = {}, drvSets = {};
+  dayKeys.forEach(d => { vehSets[d] = new Set(); drvSets[d] = new Set(); });
+  allTrips.filter(t => t.date >= minDay).forEach(t => {
+    if (vehSets[t.date]) vehSets[t.date].add(t.vehicleId);
+    if (drvSets[t.date] && t.driverId) drvSets[t.date].add(t.driverId);
+  });
+
+  // Historical liability — pre-group per vendor for speed
+  const vTrips = {}, vPay = {};
+  vendors.forEach(v => {
+    vTrips[v.id] = allTrips.filter(t => t.vendorId === v.id);
+    vPay[v.id]   = allPay.filter(p => p.vendorId === v.id);
+  });
+  const liabByDay = dayKeys.map(d =>
+    vendors.reduce((tot, v) => {
+      const earned = vTrips[v.id].filter(t => t.date <= d).reduce((s, t) => s + (t.net || 0), 0);
+      const paid   = vPay[v.id].filter(p => p.date <= d).reduce((s, p) => s + (p.amount || 0), 0);
+      return tot + Math.max(0, earned - paid);
+    }, 0)
+  );
+
+  const spData = [
+    dayVals.map(d => d.rev),
+    dayVals.map(d => d.comm),
+    dayVals.map(d => Math.max(0, (d.comm || 0) - (d.exp || 0))),
+    liabByDay,
+    dayKeys.map(d => (vehSets[d] ? vehSets[d].size : 0)),
+    dayKeys.map(d => (drvSets[d] ? drvSets[d].size : 0)),
+  ];
+
+  setTimeout(() => {
+    const colors = ['var(--accent)','var(--amber)','var(--emerald)','var(--red)','var(--blue)','var(--purple)'];
+    kpis.forEach((k, i) => {
+      const el = document.getElementById('sp' + i);
+      if (!el) return;
+      const data = spData[i];
+      if (!data || data.length < 2) return;
+      const w = el.offsetWidth || 180, h = 36;
+      const min = Math.min(...data), max = Math.max(...data), range = max - min || 1;
+      const pts = data.map((v, j) => {
+        const x = (j / (data.length - 1)) * w;
+        const y = h - ((v - min) / range) * (h - 6) - 3;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      }).join('L');
+      const c = colors[i];
+      el.innerHTML = `<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+        <path d="M${pts}" fill="none" stroke="${c}" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="M0,${h} L${pts} L${w},${h} Z" fill="${c}" opacity=".15"/>
+      </svg>`;
+    });
+  }, 80);
+}
+
+/* ── Alerts ── */
+function renderAlerts(stats) {
+  const alerts = [];
+  const vendors = FleetDB.getVendors();
+  const threshold = (FleetDB.getSettings().liabilityThreshold || 100000);
+
+  vendors.forEach(v => {
+    const bal = FleetDB.getVendorBalance(v.id);
+    if (bal > threshold) alerts.push({ type:'critical', title:`${FleetDB.escapeHtml(v.name)} balance exceeds ${FleetDB.fmtMoney(threshold)}`, desc:`Current balance: ${FleetDB.fmtMoney(bal)}`, time:'Now' });
+  });
+
+  const inactiveVeh = FleetDB.getVehicles().filter(v => v.status === 'inactive');
+  if (inactiveVeh.length) alerts.push({ type:'warning', title:`${inactiveVeh.length} vehicles inactive`, desc:inactiveVeh.map(v=>FleetDB.escapeHtml(v.plate)).join(', '), time:'Today' });
+
+  const pendingPay = FleetDB.getPayouts().filter(p => p.status === 'pending');
+  if (pendingPay.length) alerts.push({ type:'info', title:`${pendingPay.length} payouts scheduled`, desc:'Review payout management', time:'—' });
+
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  const unpaidDrivers = FleetDB.getUnpaidSalariesForMonth(thisMonth);
+  if (unpaidDrivers.length) {
+    const names = unpaidDrivers.slice(0, 3).map(d => FleetDB.escapeHtml(d.name)).join(', ') + (unpaidDrivers.length > 3 ? ` +${unpaidDrivers.length - 3} more` : '');
+    alerts.push({ type:'warning', title:`${unpaidDrivers.length} driver${unpaidDrivers.length > 1 ? 's' : ''} salary unpaid this month`, desc:names, time:'This month' });
+  }
+
+  if (!alerts.length) { document.getElementById('alertsPanel').innerHTML=''; return; }
+
+  document.getElementById('alertsPanel').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div class="section-title" style="margin-bottom:0;">⚠ Attention Required</div>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('alertsPanel').innerHTML=''">Dismiss All</button>
+    </div>
+    <div class="alerts-list">
+      ${alerts.map(a => `
+      <div class="alert-item ${a.type}">
+        <div class="alert-item-icon">${a.type==='critical'?'🔴':a.type==='warning'?'🟡':'🔵'}</div>
+        <div class="alert-item-text">
+          <div class="alert-item-title">${a.title}</div>
+          <div class="alert-item-desc">${a.desc}</div>
+        </div>
+        <div class="alert-item-time">${a.time}</div>
+      </div>`).join('')}
+    </div>`;
+}
+
+/* ── Revenue Chart ── */
+function renderRevenueChart(days) {
+  const byDay = FleetDB.getTripsByDay(days);
+  const labels = Object.keys(byDay).map(d => { const dt=new Date(d); return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'}); });
+  const revData  = Object.values(byDay).map(d => d.rev);
+  const commData = Object.values(byDay).map(d => d.comm);
+
+  if (revChart) revChart.destroy();
+  const ctx = document.getElementById('revenueChart').getContext('2d');
+  revChart = new Chart(ctx, {
+    type:'line',
+    data:{ labels, datasets:[
+      { label:'Revenue',    data:revData,  borderColor:'#2A9D8F', backgroundColor:'rgba(42,157,143,.15)', fill:true, tension:.4, pointRadius:0, borderWidth:2 },
+      { label:'Commission', data:commData, borderColor:'#e9c46a', backgroundColor:'rgba(233,196,106,.1)',  fill:true, tension:.4, pointRadius:0, borderWidth:2 },
+    ]},
+    options:{
+      responsive:true, interaction:{mode:'index',intersect:false},
+      plugins:{ legend:{display:false}, tooltip:{ backgroundColor:'#1e3a47', borderColor:'rgba(42,157,143,.3)', borderWidth:1, titleColor:'#e2f0ee', bodyColor:'#86adb0', callbacks:{ label: c => ' PKR '+c.parsed.y.toLocaleString() }}},
+      scales:{
+        x:{ grid:{display:false}, ticks:{ color:'#4a7a80', maxTicksLimit: days > 30 ? 10 : 8 }},
+        y:{ grid:{ color:'rgba(42,157,143,.08)' }, ticks:{ color:'#4a7a80', callback: v => 'PKR '+(v/1000).toFixed(0)+'k' }}
+      }
+    }
+  });
+}
+
+/* ── Liability Chart ── */
+function renderLiabilityChart() {
+  const vendors    = FleetDB.getVendors();
+  const total      = vendors.reduce((s, v) => s + Math.max(0, FleetDB.getVendorBalance(v.id)), 0);
+  document.getElementById('liabilityBadge').textContent = FleetDB.fmtMoney(total);
+
+  // Compute real historical total liability at 6 points in time by replaying trip/payout history
+  const allTrips   = FleetDB.getTrips().filter(t => t.status !== 'cancelled');
+  const allPayouts = FleetDB.getPayouts();
+  const now        = new Date();
+
+  const vTrips = {}, vPay = {};
+  vendors.forEach(v => {
+    vTrips[v.id] = allTrips.filter(t => t.vendorId === v.id);
+    vPay[v.id]   = allPayouts.filter(p => p.vendorId === v.id);
+  });
+
+  const offsets = [90, 60, 45, 30, 14, 0];
+  const labels  = offsets.map(d => (d === 0 ? 'Now' : d + 'd ago'));
+  const data    = offsets.map(daysAgo => {
+    const cutoff    = new Date(now);
+    cutoff.setDate(cutoff.getDate() - daysAgo);
+    const cutoffStr = cutoff.toISOString().split('T')[0];
+    return vendors.reduce((liab, v) => {
+      const earned = vTrips[v.id].filter(t => t.date <= cutoffStr).reduce((s, t) => s + (t.net || 0), 0);
+      const paid   = vPay[v.id].filter(p => p.date <= cutoffStr).reduce((s, p) => s + (p.amount || 0), 0);
+      return liab + Math.max(0, earned - paid);
+    }, 0);
+  });
+
+  if (liabChart) liabChart.destroy();
+  const ctx = document.getElementById('liabilityChart').getContext('2d');
+  liabChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets: [{ label:'Liability', data, borderColor:'#e9c46a', backgroundColor:'rgba(233,196,106,.15)', fill:true, tension:.4, pointRadius:3, borderWidth:2, pointBackgroundColor:'#e9c46a' }] },
+    options: {
+      responsive: true,
+      plugins: { legend:{display:false}, tooltip:{ backgroundColor:'#1e3a47', borderColor:'rgba(233,196,106,.3)', borderWidth:1, callbacks:{ label: c => ' PKR ' + c.parsed.y.toLocaleString() }}},
+      scales: {
+        x: { grid:{display:false}, ticks:{color:'#4a7a80'} },
+        y: { grid:{color:'rgba(42,157,143,.08)'}, ticks:{color:'#4a7a80', callback: v => (v / 1000).toFixed(0) + 'k' }}
+      }
+    }
+  });
+}
+
+/* ── Driver Utilization ── */
+function renderDriverUtil(days) {
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
+  const cutoffStr = cutoff.toISOString().split('T')[0];
+  const trips = FleetDB.getTrips().filter(t => t.date >= cutoffStr && t.status !== 'cancelled');
+  const drivers = FleetDB.getDrivers().filter(d => d.vehicleId).slice(0, 5);
+
+  document.getElementById('driverUtilization').innerHTML = drivers.map(d => {
+    const dTrips = trips.filter(t => t.driverId === d.id);
+    const worked = new Set(dTrips.map(t => t.date)).size;
+    const pct = Math.min(100, Math.round(worked / days * 100));
+    const cls = pct >= 70 ? 'green' : pct >= 40 ? 'amber' : 'red';
+    const clr = pct >= 70 ? 'var(--emerald)' : pct >= 40 ? 'var(--amber)' : 'var(--red)';
+    return `
+    <div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+        <span style="font-size:13px;font-weight:500;">${FleetDB.escapeHtml(d.name)}</span>
+        <span style="font-size:12px;font-family:var(--mono);font-weight:600;color:${clr};">${pct}% <span style="color:var(--text-muted);font-weight:400;">(${worked}d)</span></span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill ${cls}" style="width:${pct}%"></div></div>
+    </div>`;
+  }).join('');
+}
+
+/* ── Top Vendors ── */
+function renderTopVendors() {
+  const vendors = FleetDB.getVendors().map(v => ({ ...v, balance: FleetDB.getVendorBalance(v.id), stats: FleetDB.getVendorStats(v.id) }))
+    .sort((a,b) => b.stats.lifetime - a.stats.lifetime).slice(0, 4);
+
+  document.getElementById('topVendors').innerHTML = vendors.map((v, i) => `
+    <div class="leaderboard-item">
+      <div class="leaderboard-rank ${i===0?'gold':i===1?'silver':i===2?'bronze':''}">#${i+1}</div>
+      <div style="width:30px;height:30px;border-radius:6px;background:${v.color}22;color:${v.color};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0;">${FleetDB.escapeHtml(v.name[0])}</div>
+      <div class="leaderboard-info">
+        <div class="leaderboard-name">${FleetDB.escapeHtml(v.name)}</div>
+        <div class="leaderboard-sub">${v.stats.vehicleCount} vehicles · Bal: ${FleetDB.fmtMoney(v.balance)}</div>
+      </div>
+      <div class="leaderboard-value">${FleetDB.fmtMoney(v.stats.lifetime)}</div>
+    </div>`).join('');
+}
+
+/* ── Recent Trips ── */
+function renderRecentTrips() {
+  const trips = FleetDB.getTrips().slice(0, 6);
+  const vehicles = FleetDB.getVehicles();
+  const sb = { completed:'badge-green', pending:'badge-amber', cancelled:'badge-red' };
+
+  document.getElementById('recentTrips').innerHTML = trips.map(t => {
+    const v = vehicles.find(vh => vh.id === t.vehicleId);
+    return `
+    <div class="leaderboard-item">
+      <div style="width:36px;flex-shrink:0;">
+        <span class="badge ${sb[t.status]}" style="padding:2px 5px;font-size:9px;">${t.status[0].toUpperCase()}</span>
+      </div>
+      <div class="leaderboard-info">
+        <div class="leaderboard-name">${FleetDB.escapeHtml(v ? v.plate : t.vehicleId)}</div>
+        <div class="leaderboard-sub">${t.date} · Comm ${FleetDB.fmtMoney(t.commission)}</div>
+      </div>
+      <div class="leaderboard-value" style="color:var(--emerald);">${FleetDB.fmtMoney(t.gross)}</div>
+    </div>`;
+  }).join('');
+}
+
+loadDashboard();
+</script>
+</body>
+</html>

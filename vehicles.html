@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Vehicles — Royal Motors</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar" id="topbar"></header>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main-content">
+    <div class="page-header">
+      <div><div class="page-title">Vehicles</div><div class="page-subtitle" id="vSubtitle">Loading…</div></div>
+      <div class="page-actions">
+        <select class="form-select" style="width:160px;height:34px;" id="vendorF" onchange="vehiclePage=0;renderVehicles()">
+          <option value="">All Vendors</option>
+        </select>
+        <select class="form-select" style="width:130px;height:34px;" id="statusF" onchange="vehiclePage=0;renderVehicles()">
+          <option value="">All Status</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+          <option value="maintenance">Maintenance</option>
+        </select>
+        <button class="btn btn-primary" id="addVehicleBtn">+ Add Vehicle</button>
+      </div>
+    </div>
+
+    <div class="grid-4 mb-5" id="vStats"></div>
+
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:12px;">
+      <div class="topbar-search" style="width:260px;">
+        <span class="search-icon">⌕</span>
+        <input type="text" placeholder="Search plate, model, vendor…" id="vSearch" aria-label="Search vehicles"/>
+      </div>
+      <div style="margin-left:auto;font-size:13px;color:var(--text-secondary);">
+        <span id="rowCount" style="font-weight:600;color:var(--text-primary);">—</span> vehicles
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Plate</th><th>Make / Model</th><th>Year</th><th>Vendor</th><th>Driver</th>
+          <th>Status</th><th style="text-align:right;">Trips</th><th style="text-align:right;">Revenue</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="vehicleBody"></tbody>
+      </table>
+    </div>
+    <div id="vPager"></div>
+  </main>
+</div>
+<nav class="mobile-nav" id="mobileNav"></nav>
+
+<!-- Add/Edit Vehicle Modal -->
+<div class="modal-overlay" id="vehicleModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title" id="vModalTitle">Add Vehicle</div>
+      <button class="icon-btn" onclick="FleetDB.closeModal('vehicleModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="vId"/>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Plate Number <span class="required">*</span></label>
+          <input type="text" class="form-input" id="vPlate" placeholder="e.g. LEA-1234"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Year</label>
+          <input type="number" class="form-input" id="vYear" placeholder="2022" min="2000" max="2030"/>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Make</label>
+          <input type="text" class="form-input" id="vMake" placeholder="Toyota"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Model</label>
+          <input type="text" class="form-input" id="vModel" placeholder="Corolla"/>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Vendor <span class="required">*</span></label>
+          <select class="form-select" id="vVendor"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-select" id="vCategory">
+            <option value="">— Select Category —</option>
+            <option value="luxury">💎 Luxury</option>
+            <option value="deluxe">⭐ Deluxe</option>
+            <option value="standard">🚗 Standard</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-select" id="vStatus">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="maintenance">Maintenance</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Assign Driver</label>
+          <select class="form-select" id="vDriver">
+            <option value="">— None —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Commission %</label>
+          <input type="number" class="form-input" id="vCommPct" placeholder="15" min="0" max="100"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <input type="text" class="form-input" id="vNotes" placeholder="Optional notes…"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="FleetDB.closeModal('vehicleModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveVehicle()">Save Vehicle</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase (cloud sync + auth) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-sync.js"></script>
+<script src="data.js"></script>
+<script>
+FleetDB.init('vehicles.html');
+const PAGE_SIZE = 50;
+let vehiclePage = 0;
+function gotoVehiclePage(p) { vehiclePage = p; renderVehicles(); }
+
+FleetDB.getVendors().forEach(v => {
+  ['vendorF','vVendor'].forEach(selId => {
+    const o = document.createElement('option'); o.value = v.id; o.textContent = v.name;
+    document.getElementById(selId).appendChild(o);
+  });
+});
+FleetDB.getDrivers().forEach(d => {
+  const o = document.createElement('option'); o.value = d.id; o.textContent = d.name;
+  document.getElementById('vDriver').appendChild(o);
+});
+
+document.getElementById('addVehicleBtn').onclick = function() {
+  clearForm(); FleetDB.openModal('vehicleModal');
+};
+
+function renderVehicles() {
+  const q  = (document.getElementById('vSearch').value||'').toLowerCase();
+  const vf = document.getElementById('vendorF').value;
+  const sf = document.getElementById('statusF').value;
+  const vendors = FleetDB.getVendors();
+  const drivers = FleetDB.getDrivers();
+  const trips   = FleetDB.getTrips().filter(t => t.status !== 'cancelled');
+
+  const all = FleetDB.getVehicles().filter(v => {
+    const vn = vendors.find(x => x.id === v.vendorId);
+    const matchQ = !q || v.plate.toLowerCase().includes(q) ||
+      (v.make||'').toLowerCase().includes(q) || (v.model||'').toLowerCase().includes(q) ||
+      (vn && vn.name.toLowerCase().includes(q));
+    return matchQ && (!vf || v.vendorId === vf) && (!sf || v.status === sf);
+  });
+
+  const active = FleetDB.getVehicles().filter(v => v.status === 'active').length;
+  const maint  = FleetDB.getVehicles().filter(v => v.status === 'maintenance').length;
+  const totRev = trips.reduce((s,t) => s + (t.gross||0), 0);
+  document.getElementById('vStats').innerHTML = [
+    ['Total Vehicles', FleetDB.getVehicles().length, ''],
+    ['Active', active, 'color:var(--emerald)'],
+    ['In Maintenance', maint, 'color:var(--amber)'],
+    ['Total Revenue', FleetDB.fmtMoney(totRev), 'color:var(--accent)'],
+  ].map(([l,v,s]) => `<div class="card" style="padding:14px;">
+    <div style="font-size:10px;color:var(--text-muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:5px;">${l}</div>
+    <div style="font-size:20px;font-weight:700;${s}">${v}</div>
+  </div>`).join('');
+
+  document.getElementById('vSubtitle').textContent = all.length + ' vehicles';
+  document.getElementById('rowCount').textContent = all.length;
+
+  const display = all.slice(vehiclePage * PAGE_SIZE, (vehiclePage + 1) * PAGE_SIZE);
+  const sb = { active:'badge-green', inactive:'badge-muted', maintenance:'badge-amber' };
+  document.getElementById('vehicleBody').innerHTML = display.map(v => {
+    const vn     = vendors.find(x => x.id === v.vendorId);
+    const d      = drivers.find(x => x.id === v.driverId);
+    const vTrips = trips.filter(t => t.vehicleId === v.id);
+    const vRev   = vTrips.reduce((s,t) => s + (t.gross||0), 0);
+    const E = FleetDB.escapeHtml;
+    const vnBadge = vn ? `<span style="display:inline-flex;align-items:center;gap:5px;">
+      <span style="width:18px;height:18px;border-radius:3px;background:${vn.color}33;color:${vn.color};display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;">${E(vn.name[0])}</span>
+      ${E(vn.name)}</span>` : '—';
+    return `<tr>
+      <td style="font-weight:600;font-family:var(--mono);font-size:12px;">${E(v.plate)}</td>
+      <td style="font-size:13px;">${E([v.make,v.model].filter(Boolean).join(' ')||'—')}</td>
+      <td class="td-mono">${E(v.year||'—')}</td>
+      <td style="font-size:13px;">${vnBadge}</td>
+      <td style="font-size:13px;color:var(--text-secondary);">${d?E(d.name):'<span style="color:var(--text-muted)">Unassigned</span>'}</td>
+      <td><span class="badge ${sb[v.status]||'badge-muted'}">${E(v.status)}</span></td>
+      <td style="text-align:right;" class="td-mono">${vTrips.length}</td>
+      <td style="text-align:right;" class="td-amount">${FleetDB.fmtMoney(vRev)}</td>
+      <td><div style="display:flex;gap:5px;"><button class="btn btn-secondary btn-sm" onclick="editVehicle('${v.id}')">Edit</button><button class="btn btn-sm" style="color:var(--red);border:1px solid rgba(239,68,68,.2);" onclick="deleteVehicleConfirm('${v.id}')">Del</button></div></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--text-muted);">No vehicles found</td></tr>';
+  document.getElementById('vPager').innerHTML = FleetDB.pagerHTML(all.length, vehiclePage, PAGE_SIZE, 'gotoVehiclePage');
+}
+
+function editVehicle(id) {
+  const v = FleetDB.getVehicles().find(x => x.id === id);
+  if (!v) return;
+  document.getElementById('vId').value        = v.id;
+  document.getElementById('vPlate').value     = v.plate;
+  document.getElementById('vYear').value      = v.year||'';
+  document.getElementById('vMake').value      = v.make||'';
+  document.getElementById('vModel').value     = v.model||'';
+  document.getElementById('vCategory').value  = v.category||'';
+  document.getElementById('vVendor').value    = v.vendorId||'';
+  document.getElementById('vStatus').value    = v.status||'active';
+  document.getElementById('vDriver').value  = v.driverId||'';
+  document.getElementById('vCommPct').value = v.commPct||'';
+  document.getElementById('vNotes').value   = v.notes||'';
+  document.getElementById('vModalTitle').textContent = 'Edit Vehicle';
+  FleetDB.openModal('vehicleModal');
+}
+
+function saveVehicle() {
+  const plate     = document.getElementById('vPlate').value.trim().toUpperCase();
+  const vendor    = document.getElementById('vVendor').value;
+  const editingId = document.getElementById('vId').value;
+  if (!plate)  { FleetDB.showToast('Plate required','error'); return; }
+  if (!vendor) { FleetDB.showToast('Select a vendor','error'); return; }
+  const commPctVal = parseFloat(document.getElementById('vCommPct').value);
+  if (!isNaN(commPctVal) && (commPctVal < 0 || commPctVal > 100)) { FleetDB.showToast('Commission must be 0–100%', 'error'); return; }
+  const dup = FleetDB.getVehicles().find(v => v.plate.toUpperCase() === plate && v.id !== editingId);
+  if (dup) { FleetDB.showToast('Plate ' + plate + ' already exists','error'); return; }
+  const data = {
+    plate, vendorId: vendor,
+    year:     document.getElementById('vYear').value||null,
+    make:     document.getElementById('vMake').value.trim(),
+    model:    document.getElementById('vModel').value.trim(),
+    category: document.getElementById('vCategory').value,
+    status:   document.getElementById('vStatus').value,
+    driverId: document.getElementById('vDriver').value||null,
+    commPct:  parseFloat(document.getElementById('vCommPct').value)||15,
+    notes:    document.getElementById('vNotes').value.trim(),
+  };
+  const id = document.getElementById('vId').value;
+  if (id) FleetDB.updateVehicle(id, data);
+  else    FleetDB.addVehicle(data);
+  FleetDB.closeModal('vehicleModal');
+  FleetDB.showToast(id ? 'Vehicle updated' : 'Vehicle added');
+  renderVehicles();
+}
+
+function clearForm() {
+  ['vId','vPlate','vYear','vMake','vModel','vNotes','vCommPct'].forEach(i => document.getElementById(i).value='');
+  document.getElementById('vVendor').value   = '';
+  document.getElementById('vCategory').value = '';
+  document.getElementById('vStatus').value   = 'active';
+  document.getElementById('vDriver').value = '';
+  document.getElementById('vModalTitle').textContent = 'Add Vehicle';
+}
+
+function deleteVehicleConfirm(id) {
+  const v = FleetDB.getVehicle(id);
+  if (!v) return;
+  const trips = FleetDB.getTrips().filter(t => t.vehicleId === id);
+  let msg = `Delete vehicle ${v.plate}?`;
+  if (trips.length) msg += `\n\nWarning: ${trips.length} trip record(s) reference this vehicle.`;
+  msg += '\n\nThis cannot be undone.';
+  if (!confirm(msg)) return;
+  FleetDB.deleteVehicle(id);
+  FleetDB.showToast(`Vehicle ${v.plate} deleted`, 'error');
+  renderVehicles();
+}
+
+document.getElementById('vSearch').oninput = FleetDB.debounce(() => { vehiclePage = 0; renderVehicles(); }, 280);
+renderVehicles();
+</script>
+</body>
+</html>

@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Booking — Royal Motors</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"/>
+  <link rel="stylesheet" href="styles.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"/>
+  <style>
+    /* ── Flatpickr teal theming ── */
+    .flatpickr-day.selected,.flatpickr-day.startRange,.flatpickr-day.endRange,
+    .flatpickr-day.selected:hover,.flatpickr-day.startRange:hover,.flatpickr-day.endRange:hover {
+      background:#2A9D8F!important;border-color:#2A9D8F!important;color:#fff!important; }
+    .flatpickr-day.inRange {
+      background:rgba(42,157,143,.18)!important;border-color:transparent!important;
+      box-shadow:-5px 0 0 rgba(42,157,143,.18),5px 0 0 rgba(42,157,143,.18)!important; }
+    .flatpickr-day:hover:not(.selected):not(.startRange):not(.endRange) { background:rgba(42,157,143,.12)!important; }
+    .flatpickr-months .flatpickr-month,.flatpickr-weekdays,.flatpickr-weekday { background:#264653!important;color:#fff!important;fill:#fff!important; }
+    .flatpickr-current-month,.flatpickr-current-month input,.flatpickr-current-month select { color:#4d87c8!important; }
+    .flatpickr-current-month .flatpickr-monthDropdownContainer select { font-weight:700!important; }
+    .flatpickr-monthDropdownContainer select,
+    .flatpickr-monthDropdownContainer select option,
+    .flatpickr-current-month .flatpickr-monthDropdownContainer .flatpickr-monthDropdownContainer-item { background:#264653!important;color:#4d87c8!important;border:none!important;font-weight:700!important; }
+    .flatpickr-current-month .numInputWrapper input { background:transparent!important;color:#fff!important; }
+    .flatpickr-current-month .numInputWrapper span { border-color:rgba(255,255,255,.3)!important; }
+    .flatpickr-current-month .numInputWrapper span svg { fill:#fff!important; }
+    .flatpickr-prev-month svg,.flatpickr-next-month svg { fill:#fff!important; }
+    .flatpickr-calendar { border-radius:12px!important;box-shadow:0 8px 32px rgba(0,0,0,.22)!important;border:1px solid var(--border)!important; }
+    .flatpickr-day { border-radius:6px!important; }
+    [data-theme="dark"] .flatpickr-calendar { background:#1e2d3d!important; }
+    [data-theme="dark"] .flatpickr-day { color:#e2e8f0!important; }
+    [data-theme="dark"] .flatpickr-day.flatpickr-disabled { color:#4a5568!important; }
+  </style>
+  <style>
+    /* Vehicle cards */
+    .veh-card {
+      display:flex;flex-direction:column;padding:10px 12px;min-width:0;
+      border:2px solid var(--border);border-radius:var(--r-md);
+      cursor:pointer;background:var(--bg-elevated);position:relative;
+      transition:border-color .15s,background .15s;user-select:none;
+    }
+    .veh-card:hover { border-color:var(--border-mid); }
+    .veh-card.sel   { border-color:var(--accent);background:var(--bg-elevated); }
+    .vc-chk {
+      position:absolute;top:5px;right:6px;
+      width:16px;height:16px;border-radius:50%;
+      background:var(--accent);color:#fff;font-size:9px;font-weight:700;
+      display:none;align-items:center;justify-content:center;
+    }
+    .veh-card.sel .vc-chk { display:flex; }
+    .vc-name   { font-size:12px;font-weight:700;line-height:1.35;color:var(--text-primary);margin-bottom:3px;padding-right:20px; }
+    .veh-card.sel .vc-name { color:var(--accent); }
+    .vc-plate  { font-size:10px;font-family:var(--mono);color:var(--text-muted); }
+    .vc-vendor { font-size:10px;color:var(--text-muted);margin-top:1px; }
+    .vc-warn   { font-size:9px;color:var(--amber);font-weight:700;margin-top:2px; }
+    /* Quantity controls (shown only when card is selected) */
+    .vc-qty {
+      display:none;align-items:center;justify-content:space-between;
+      margin-top:7px;padding-top:6px;border-top:1px solid var(--accent)44;
+    }
+    .veh-card.sel .vc-qty { display:flex; }
+    .vc-qty-btn {
+      width:22px;height:22px;border-radius:50%;border:none;cursor:pointer;
+      background:var(--accent);color:#fff;font-size:15px;font-weight:700;
+      display:flex;align-items:center;justify-content:center;line-height:1;
+      flex-shrink:0;
+    }
+    .vc-qty-btn:hover { opacity:.85; }
+    .vc-qty-num { font-size:14px;font-weight:700;color:var(--accent);min-width:20px;text-align:center; }
+    .veh-grid  { display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px; }
+
+    /* Category label */
+    .cat-lbl {
+      font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;
+      display:flex;align-items:center;gap:10px;margin:16px 0 8px;
+    }
+    .cat-lbl:first-child { margin-top:0; }
+    .cat-lbl::after { content:'';flex:1;height:1px;background:var(--border); }
+
+    /* Customer search results (inline, no floating) */
+    .srch-results { margin-top:8px;border:1px solid var(--border-mid);border-radius:var(--r-md);overflow:hidden; }
+    .srch-row {
+      padding:9px 12px;cursor:pointer;display:flex;align-items:center;
+      gap:10px;border-bottom:1px solid var(--border);transition:background .1s;
+    }
+    .srch-row:last-child { border-bottom:none; }
+    .srch-row:hover { background:var(--bg-hover); }
+
+    /* Returning banner */
+    .ret-banner {
+      display:flex;align-items:center;gap:8px;
+      background:var(--accent)18;border:1px solid var(--accent)50;
+      border-radius:var(--r-sm);padding:7px 10px;margin-bottom:8px;
+    }
+
+    /* History rows */
+    .hist-row {
+      display:flex;align-items:center;gap:8px;padding:5px 0;
+      border-bottom:1px solid var(--border);
+    }
+    .hist-row:last-child { border-bottom:none; }
+
+    /* Layout */
+    .bk-grid { display:grid;grid-template-columns:1fr 350px;gap:20px;align-items:start; }
+    @media(max-width:960px){ .bk-grid{ grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar" id="topbar"></header>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <nav class="sidebar" id="sidebar"></nav>
+
+  <main class="main-content">
+
+    <div class="page-header">
+      <div>
+        <div class="page-title">Booking</div>
+        <div class="page-subtitle">Choose service · pick vehicles · confirm customer</div>
+      </div>
+      <div class="page-actions" style="display:flex;align-items:center;gap:10px;">
+        <span class="badge badge-amber" id="holdBadge" style="display:none;cursor:pointer;"
+              onclick="document.getElementById('holdQueue').scrollIntoView({behavior:'smooth'})"></span>
+        <a href="trips.html" class="btn btn-secondary">All Duties →</a>
+      </div>
+    </div>
+
+    <!-- Hold Queue -->
+    <div id="holdQueue"></div>
+
+    <div class="bk-grid">
+
+      <!-- ══ LEFT: Service + Vehicles ══ -->
+      <div>
+
+        <!-- Service & Route card -->
+        <div class="card mb-5">
+          <div class="card-header"><div class="card-title">Service &amp; Route</div></div>
+          <div class="card-body">
+
+            <div class="form-group">
+              <label class="form-label">Booking Type <span class="required">*</span></label>
+              <div style="display:flex;gap:10px;">
+                <button class="btn btn-secondary" id="btnTour" onclick="setSvc('tour')"
+                        style="flex:1;padding:11px;font-size:14px;">🗺 Tour</button>
+                <button class="btn btn-secondary" id="btnPD"   onclick="setSvc('pick_drop')"
+                        style="flex:1;padding:11px;font-size:14px;">🚗 Pick &amp; Drop</button>
+              </div>
+            </div>
+
+            <!-- Pick & Drop -->
+            <div id="pdFields">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">From <span class="required">*</span></label>
+                  <input type="text" class="form-input" id="fromLoc" placeholder="Pickup location"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">To <span class="required">*</span></label>
+                  <input type="text" class="form-input" id="toLoc" placeholder="Drop-off location"/>
+                </div>
+              </div>
+              <div class="form-group" style="max-width:240px;">
+                <label class="form-label">Date <span class="required">*</span></label>
+                <input type="text" class="form-input" id="pdDate" placeholder="Pick a date" readonly style="cursor:pointer;"/>
+              </div>
+            </div>
+
+            <!-- Tour -->
+            <div id="tourFields" style="display:none;">
+              <div class="form-group">
+                <label class="form-label">Tour Dates <span class="required">*</span></label>
+                <input type="text" class="form-input" id="tourDateRange" placeholder="Select start → end date" readonly style="cursor:pointer;"/>
+                <input type="hidden" id="tourFrom"/>
+                <input type="hidden" id="tourTo"/>
+              </div>
+              <div class="form-group" style="max-width:280px;">
+                <label class="form-label">Driver (optional)</label>
+                <select class="form-select" id="tourDriver">
+                  <option value="">— No preference —</option>
+                </select>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Vehicle Selection card -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Select Vehicle(s)</div>
+              <div class="card-subtitle">Tap to select · multiple allowed</div>
+            </div>
+            <span class="badge badge-teal" id="selBadge" style="display:none;"></span>
+          </div>
+          <div class="card-body" id="vSection"></div>
+        </div>
+
+      </div>
+
+      <!-- ══ RIGHT: Customer + Booking Details ══ -->
+      <!-- NOTE: not sticky — avoids overflow/clipping issues with search results -->
+      <div style="display:flex;flex-direction:column;gap:16px;">
+
+        <!-- Customer card -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Customer</div>
+            <button class="btn btn-ghost btn-sm" id="clearCustBtn" onclick="clearCust()"
+                    style="display:none;font-size:11px;color:var(--text-muted);">✕ Clear</button>
+          </div>
+          <div class="card-body" style="padding-top:8px;">
+
+            <!-- Phone field — search on every keystroke -->
+            <div class="form-group" style="margin-bottom:8px;">
+              <label class="form-label">Phone <span class="required">*</span></label>
+              <input type="text" class="form-input" id="custPhone"
+                     placeholder="03XX-XXXXXXX  (type to search)"
+                     style="font-size:14px;"
+                     autocomplete="off"/>
+            </div>
+
+            <!-- Name field -->
+            <div class="form-group" style="margin-bottom:10px;">
+              <label class="form-label">Name <span class="required">*</span></label>
+              <input type="text" class="form-input" id="custName"
+                     placeholder="Customer full name"
+                     autocomplete="off"/>
+            </div>
+
+            <!-- Search results — always visible section -->
+            <div id="searchResults" style="display:none;"></div>
+
+            <!-- Selected customer info + history -->
+            <div id="custInfo" style="display:none;"></div>
+
+          </div>
+        </div>
+
+        <!-- Booking Details card -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Details</div>
+            <span class="badge badge-amber" id="editBadge" style="display:none;">Editing Hold</span>
+          </div>
+          <div class="card-body">
+            <input type="hidden" id="editBkId"/>
+
+            <div class="form-group">
+              <label class="form-label">Status</label>
+              <select class="form-select" id="bkStatus">
+                <option value="confirmed">Confirmed</option>
+                <option value="hold">Hold</option>
+                <option value="pending">Pending</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Notes</label>
+              <textarea class="form-textarea" id="bkNotes" rows="2"
+                        placeholder="Special instructions…"></textarea>
+            </div>
+
+            <!-- Financial (collapsible) -->
+            <div style="border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;">
+              <button type="button" onclick="toggleFin()"
+                style="width:100%;padding:8px 12px;background:var(--bg-elevated);border:none;
+                       cursor:pointer;display:flex;justify-content:space-between;align-items:center;
+                       font-size:12px;color:var(--text-secondary);font-family:inherit;">
+                <span>Financial <span style="color:var(--text-muted);font-size:11px;">(optional)</span></span>
+                <span id="finIcon">▸</span>
+              </button>
+              <div id="finFields" style="display:none;padding:10px 12px;border-top:1px solid var(--border);">
+                <div class="form-row">
+                  <div class="form-group" style="margin:0;">
+                    <label class="form-label">Gross</label>
+                    <div class="input-group">
+                      <span class="input-prefix">₨</span>
+                      <input type="number" class="form-input" id="bkGross" placeholder="0" min="0"/>
+                    </div>
+                  </div>
+                  <div class="form-group" style="margin:0;">
+                    <label class="form-label">Commission
+                      <span style="font-size:10px;color:var(--text-muted);font-weight:400;">(opt.)</span>
+                    </label>
+                    <div class="input-group">
+                      <span class="input-prefix">₨</span>
+                      <input type="number" class="form-input" id="bkComm" placeholder="0" min="0"/>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+          <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;">
+            <button class="btn btn-secondary btn-lg" onclick="saveBk('hold')" style="flex:1;">⏸ Hold</button>
+            <button class="btn btn-primary   btn-lg" onclick="saveBk(null)"  style="flex:1;">✓ Save Booking</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+</div>
+<nav class="mobile-nav" id="mobileNav"></nav>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<!-- Firebase (cloud sync + auth) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-sync.js"></script>
+<script src="data.js"></script>
+<script>
+FleetDB.init('dispatch.html');
+
+/* ═══════════════════════ STATE ═══════════════════════ */
+let curCust = null;
+let selVehs = {};   // { vehicleId: quantity }  e.g. { 'vh2': 2, 'vh5': 1 }
+let svcType = 'tour';
+let pdPicker, tourRangePicker;
+
+/* ═══════════════════════ VEHICLE CATEGORY MAPS ═══════ */
+const CAT_LABELS = { luxury:'💎 Luxury', deluxe:'⭐ Deluxe', standard:'🚗 Standard' };
+const CAT_COLORS = { luxury:'#e9c46a',   deluxe:'#a78bfa',   standard:'var(--accent)' };
+
+/* ═══════════════════════ DATE PICKERS ════════════════ */
+const fmtDate = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+
+pdPicker = flatpickr('#pdDate', {
+  dateFormat: 'Y-m-d',
+  defaultDate: 'today',
+  allowInput: false,
+});
+
+tourRangePicker = flatpickr('#tourDateRange', {
+  mode: 'range',
+  dateFormat: 'Y-m-d',
+  allowInput: false,
+  onChange(selectedDates) {
+    document.getElementById('tourFrom').value = selectedDates[0] ? fmtDate(selectedDates[0]) : '';
+    document.getElementById('tourTo').value   = selectedDates[1] ? fmtDate(selectedDates[1]) : '';
+  },
+});
+
+/* ═══════════════════════ INIT ════════════════════════ */
+populateTourDrivers();
+renderVehicles();
+renderHoldQueue();
+setSvc('tour');
+
+/* ═══════════════════════ SERVICE TYPE ════════════════ */
+function setSvc(t) {
+  svcType = t;
+  document.getElementById('pdFields').style.display   = t === 'pick_drop' ? '' : 'none';
+  document.getElementById('tourFields').style.display = t === 'tour'      ? '' : 'none';
+  document.getElementById('btnPD').className   = 'btn ' + (t === 'pick_drop' ? 'btn-primary' : 'btn-secondary');
+  document.getElementById('btnTour').className = 'btn ' + (t === 'tour'      ? 'btn-primary' : 'btn-secondary');
+  // keep inline styles after class reset
+  ['btnPD','btnTour'].forEach(id => {
+    document.getElementById(id).style.cssText = 'flex:1;padding:11px;font-size:14px;';
+  });
+}
+
+/* ═══════════════════════ VEHICLES ════════════════════ */
+
+function vehicleDisplayName(v) {
+  const parts = [v.make, v.model, v.year ? String(v.year) : ''].filter(x => x && x.trim());
+  return parts.length ? parts.join(' ') : v.plate;
+}
+
+function renderVehicles() {
+  const vehicles = FleetDB.getVehicles();
+  const el = document.getElementById('vSection');
+
+  if (!vehicles.length) {
+    el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-muted);font-size:13px;">No vehicles found — add vehicles from the Vehicles page first.</div>';
+    return;
+  }
+
+  // Group by category; uncategorized → '' bucket
+  const order  = ['luxury','deluxe','standard',''];
+  const groups = {};
+  order.forEach(k => groups[k] = []);
+  vehicles.forEach(v => {
+    const c = (v.category || '').toLowerCase().trim();
+    if (groups[c] !== undefined) groups[c].push(v);
+    else groups[''].push(v);
+  });
+
+  let html = '';
+  order.forEach(cat => {
+    const list = groups[cat];
+    if (!list.length) return;
+
+    const label = CAT_LABELS[cat] || 'Other';
+    const color = CAT_COLORS[cat] || 'var(--text-muted)';
+
+    html += `<div class="cat-lbl" style="color:${color};">${label}</div>
+             <div class="veh-grid" style="margin-bottom:4px;">`;
+
+    list.forEach(v => {
+      const vendor = FleetDB.getVendor(v.vendorId);
+      const qty    = selVehs[v.id] || 0;
+      const isSel  = qty > 0;
+      const warn   = v.status === 'maintenance' ? '<div class="vc-warn">MAINTENANCE</div>'
+                   : v.status === 'on_trip'     ? '<div class="vc-warn">ON TRIP</div>'
+                   : v.status === 'inactive'    ? '<div class="vc-warn">INACTIVE</div>' : '';
+      html += `
+        <div id="vc_${v.id}" class="veh-card${isSel ? ' sel' : ''}"
+             onclick="selectVeh('${v.id}')">
+          <div class="vc-chk">${qty}</div>
+          <div class="vc-name">${vehicleDisplayName(v)}</div>
+          <div class="vc-plate">${FleetDB.escapeHtml(v.plate)}</div>
+          <div class="vc-vendor">${FleetDB.escapeHtml(vendor ? vendor.name : '')}</div>
+          ${warn}
+          <div class="vc-qty" onclick="event.stopPropagation()">
+            <button class="vc-qty-btn" onclick="changeQty('${v.id}',-1)">−</button>
+            <span class="vc-qty-num">${qty}</span>
+            <button class="vc-qty-btn" onclick="changeQty('${v.id}',1)">+</button>
+          </div>
+        </div>`;
+    });
+    html += `</div>`;
+  });
+
+  el.innerHTML = html;
+  updateSelBadge();
+}
+
+function selectVeh(id) {
+  // Click on unselected card → add with qty 1
+  // Click on already-selected card → do nothing (use +/− buttons)
+  if (!selVehs[id]) changeQty(id, 1);
+}
+
+function changeQty(id, delta) {
+  const current = selVehs[id] || 0;
+  const next    = current + delta;
+  if (next <= 0) {
+    delete selVehs[id];
+  } else {
+    selVehs[id] = next;
+  }
+  // Update just this card without re-rendering all vehicles
+  const card = document.getElementById('vc_' + id);
+  if (card) {
+    const qty = selVehs[id] || 0;
+    if (qty > 0) {
+      card.classList.add('sel');
+      card.querySelector('.vc-chk').textContent   = qty;
+      card.querySelector('.vc-qty-num').textContent = qty;
+    } else {
+      card.classList.remove('sel');
+      card.querySelector('.vc-chk').textContent   = '';
+      card.querySelector('.vc-qty-num').textContent = '0';
+    }
+  }
+  updateSelBadge();
+}
+
+function updateSelBadge() {
+  const total = Object.values(selVehs).reduce((s, n) => s + n, 0);
+  const types = Object.keys(selVehs).length;
+  const b = document.getElementById('selBadge');
+  b.style.display = total ? '' : 'none';
+  b.textContent   = total + ' vehicle' + (total !== 1 ? 's' : '')
+                  + (types < total ? ' (' + types + ' type' + (types !== 1 ? 's' : '') + ')' : '') + ' selected';
+}
+
+/* ═══════════════════════ TOUR DRIVER ════════════════ */
+function populateTourDrivers() {
+  const sel = document.getElementById('tourDriver');
+  FleetDB.getDrivers().forEach(d => {
+    const o = document.createElement('option');
+    o.value = d.id; o.textContent = d.name;
+    sel.appendChild(o);
+  });
+}
+
+/* ═══════════════════════ CUSTOMER SEARCH ════════════ */
+
+// Wire search via addEventListener (more reliable than inline oninput)
+document.getElementById('custPhone').addEventListener('input', function() {
+  if (!this.value.trim()) { hideSearch(); return; }
+  doSearch(this.value.trim(), 'phone');
+});
+document.getElementById('custName').addEventListener('input', function() {
+  if (curCust && curCust.id) return;
+  if (!this.value.trim()) { hideSearch(); return; }
+  doSearch(this.value.trim(), 'name');
+});
+
+function doSearch(q, field) {
+  const el = document.getElementById('searchResults');
+  if (!el) return;
+
+  const clean = q.replace(/[\s\-()]/g, '').toLowerCase();
+  let matches = [];
+  try {
+    matches = FleetDB.getCustomers().filter(c => {
+      const p = (c.phone || '').replace(/[\s\-()]/g, '').toLowerCase();
+      const n = (c.name  || '').toLowerCase();
+      return field === 'phone' ? p.includes(clean) : (n.includes(clean) || p.includes(clean));
+    }).slice(0, 6);
+  } catch(e) { matches = []; }
+
+  const addNewRow = `
+    <div class="srch-row" onclick="startNewCust()" style="background:var(--accent)10;">
+      <span style="font-size:18px;">➕</span>
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--accent);">Add as new customer</div>
+        <div style="font-size:11px;color:var(--text-muted);">${matches.length ? 'Or select from above' : 'No existing customer found'}</div>
+      </div>
+    </div>`;
+
+  const matchRows = matches.map(c => {
+    const cnt = FleetDB.getCustomerBookingHistory(c.id).length;
+    const sc  = c.status === 'active' ? 'badge-green' : 'badge-amber';
+    const retStr = cnt > 0 ? ` · <strong style="color:var(--accent);">${cnt} booking${cnt!==1?'s':''}</strong>` : ' · New';
+    const E = FleetDB.escapeHtml;
+    return `<div class="srch-row" onclick="selectCust('${c.id}')">
+      <span style="font-size:18px;">👤</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;">${E(c.name)}</div>
+        <div style="font-size:11px;color:var(--text-muted);">${E(c.phone)}${c.route?' · '+E(c.route):''}${retStr}</div>
+      </div>
+      <span class="badge ${sc}" style="flex-shrink:0;">${E(c.status)}</span>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `<div class="srch-results">${matchRows}${addNewRow}</div>`;
+  el.style.display = 'block';
+}
+
+function hideSearch() {
+  document.getElementById('searchResults').style.display = 'none';
+}
+
+/* ═══════════════════════ CUSTOMER SELECTION ═════════ */
+function selectCust(id) {
+  curCust = FleetDB.getCustomer(id);
+  hideSearch();
+  document.getElementById('custName').value  = curCust.name;
+  document.getElementById('custPhone').value = curCust.phone;
+  document.getElementById('clearCustBtn').style.display = '';
+  renderCustInfo();
+}
+
+function startNewCust() {
+  // Keep whatever name/phone user typed, save as new
+  curCust = { id: null };
+  hideSearch();
+  document.getElementById('clearCustBtn').style.display = '';
+  document.getElementById('custInfo').style.display = 'none';
+}
+
+function clearCust() {
+  curCust = null;
+  document.getElementById('custName').value  = '';
+  document.getElementById('custPhone').value = '';
+  document.getElementById('searchResults').style.display = 'none';
+  document.getElementById('custInfo').style.display = 'none';
+  document.getElementById('clearCustBtn').style.display = 'none';
+}
+
+/* ═══════════════════════ CUSTOMER INFO PANEL ════════ */
+function renderCustInfo() {
+  const c    = curCust;
+  const hist = c.id ? FleetDB.getCustomerBookingHistory(c.id) : [];
+  const vMap = {};
+  FleetDB.getVehicles().forEach(v => vMap[v.id] = v);
+
+  const SVC = { pick_drop:'🚗', tour:'🗺' };
+  const STC = {
+    confirmed:'var(--emerald)', hold:'var(--amber)',
+    pending:'var(--amber)', cancelled:'var(--red)', completed:'var(--accent)'
+  };
+
+  const returning = hist.length > 0;
+  const sc = c.status === 'active' ? 'var(--emerald)' : 'var(--amber)';
+  const sl = c.status === 'hold'   ? '⏸ Hold' : '● Active';
+
+  const retBanner = returning
+    ? `<div class="ret-banner">
+         <span style="font-size:20px;">👋</span>
+         <div>
+           <div style="font-size:12px;font-weight:700;color:var(--accent);">Returning Customer</div>
+           <div style="font-size:11px;color:var(--text-muted);">
+             ${hist.length} previous booking${hist.length !== 1 ? 's' : ''}
+           </div>
+         </div>
+       </div>` : '';
+
+  const Esc = FleetDB.escapeHtml;
+  const details = [
+    c.route   ? `🛣 ${Esc(c.route)}`   : '',
+    c.address ? `📍 ${Esc(c.address)}` : '',
+    c.cnic    ? `🪪 ${Esc(c.cnic)}`    : '',
+  ].filter(Boolean).map(t =>
+    `<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${t}</div>`
+  ).join('');
+
+  const histRows = hist.slice(0, 4).map(b => {
+    const detail = b.serviceType === 'pick_drop'
+      ? `${Esc(b.fromLocation || '?')} → ${Esc(b.toLocation || '?')}`
+      : `${Esc(b.tourFromDate || '?')} → ${Esc(b.tourToDate || '?')}`;
+    return `<div class="hist-row">
+      <span style="font-size:14px;flex-shrink:0;">${SVC[b.serviceType] || '📋'}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${detail}</div>
+        <div style="font-size:10px;color:var(--text-muted);">${b.requestedDate}</div>
+      </div>
+      <span style="font-size:9px;font-weight:700;flex-shrink:0;color:${STC[b.status] || 'var(--text-muted)'};">${b.status.toUpperCase()}</span>
+    </div>`;
+  }).join('');
+
+  const moreLink = hist.length > 4
+    ? `<a href="customers.html" style="font-size:11px;color:var(--accent);">View all ${hist.length} bookings →</a>`
+    : '';
+
+  document.getElementById('custInfo').innerHTML = `
+    <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px;">
+      ${retBanner}
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+        <div>
+          ${details}
+          <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">ID: ${c.id || '—'}</div>
+        </div>
+        <span style="font-size:11px;font-weight:600;color:${sc};flex-shrink:0;margin-left:8px;">${sl}</span>
+      </div>
+      ${histRows
+        ? `<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:4px;">
+             <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;
+                         letter-spacing:.5px;margin-bottom:6px;">Previous Bookings</div>
+             ${histRows}
+             ${moreLink}
+           </div>`
+        : `<div style="font-size:12px;color:var(--text-muted);padding-top:4px;">No previous bookings</div>`}
+    </div>`;
+  document.getElementById('custInfo').style.display = '';
+}
+
+/* ═══════════════════════ HOLD QUEUE ════════════════ */
+function renderHoldQueue() {
+  const holds = FleetDB.getHoldBookings();
+  const badge = document.getElementById('holdBadge');
+  const el    = document.getElementById('holdQueue');
+
+  badge.style.display = holds.length ? '' : 'none';
+  if (holds.length) badge.textContent = '⏸ ' + holds.length + ' on hold';
+
+  if (!holds.length) { el.innerHTML = ''; el.style.marginBottom = '0'; return; }
+  el.style.marginBottom = '16px';
+
+  el.innerHTML = `
+    <div style="background:#e9c46a14;border:1px solid #e9c46a44;border-radius:var(--r-md);padding:10px 14px;">
+      <div style="font-size:11px;font-weight:600;color:var(--amber);text-transform:uppercase;
+                  letter-spacing:.5px;margin-bottom:8px;">
+        ⏸ On Hold — ${holds.length} waiting
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${holds.map(b => `
+          <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;
+                      background:var(--bg-surface);border-radius:var(--r-sm);border:1px solid var(--border);">
+            <div style="flex:1;min-width:0;">
+              <span style="font-size:13px;font-weight:600;">${FleetDB.escapeHtml(b.customerName || '?')}</span>
+              <span style="font-size:11px;color:var(--text-muted);margin-left:8px;">${FleetDB.escapeHtml(b.customerPhone || '')}</span>
+              <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">
+                · ${b.serviceType === 'pick_drop' ? '🚗 Pick&Drop' : '🗺 Tour'} · ${b.requestedDate}
+              </span>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="resumeHold('${b.id}')"
+                    style="color:var(--amber);border-color:var(--amber);flex-shrink:0;">Resume →</button>
+            <button class="btn btn-ghost btn-sm" onclick="cancelHold('${b.id}')"
+                    style="color:var(--text-muted);flex-shrink:0;">✕</button>
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+function resumeHold(id) {
+  const b = FleetDB.getBooking(id);
+  if (!b) return;
+
+  if (b.customerId) selectCust(b.customerId);
+
+  setSvc(b.serviceType);
+  document.getElementById('fromLoc').value  = b.fromLocation || '';
+  document.getElementById('toLoc').value    = b.toLocation   || '';
+  pdPicker.setDate(b.requestedDate || FleetDB.today());
+  if (b.tourFromDate && b.tourToDate) {
+    tourRangePicker.setDate([b.tourFromDate, b.tourToDate]);
+    document.getElementById('tourFrom').value = b.tourFromDate;
+    document.getElementById('tourTo').value   = b.tourToDate;
+  }
+  document.getElementById('tourDriver').value = (b.driverIds && b.driverIds[0]) ? b.driverIds[0] : '';
+  document.getElementById('bkStatus').value = 'confirmed';
+  document.getElementById('bkNotes').value  = b.notes || '';
+
+  // Rebuild qty map from repeated IDs array (e.g. ['vh1','vh1','vh2'] → {vh1:2, vh2:1})
+  selVehs = {};
+  (b.vehicleIds || []).forEach(id => { selVehs[id] = (selVehs[id] || 0) + 1; });
+  renderVehicles();
+
+  if (b.gross) {
+    document.getElementById('bkGross').value = b.gross;
+    document.getElementById('finFields').style.display = '';
+    document.getElementById('finIcon').textContent = '▾';
+  }
+  if (b.commission) document.getElementById('bkComm').value = b.commission;
+
+  document.getElementById('editBkId').value = id;
+  document.getElementById('editBadge').style.display = '';
+  FleetDB.showToast('Hold booking loaded — confirm to save');
+}
+
+function cancelHold(id) {
+  if (!confirm('Cancel this held booking?')) return;
+  FleetDB.deleteBooking(id);
+  renderHoldQueue();
+  FleetDB.showToast('Hold cancelled');
+}
+
+/* ═══════════════════════ FINANCIAL TOGGLE ══════════ */
+function toggleFin() {
+  const show = document.getElementById('finFields').style.display === 'none';
+  document.getElementById('finFields').style.display = show ? '' : 'none';
+  document.getElementById('finIcon').textContent     = show ? '▾' : '▸';
+}
+
+/* ═══════════════════════ SAVE BOOKING ══════════════ */
+function saveBk(forceStatus) {
+  // Ensure customer is saved first
+  const nameVal  = document.getElementById('custName').value.trim();
+  const phoneVal = document.getElementById('custPhone').value.trim();
+
+  if (!nameVal)  { FleetDB.showToast('Enter customer name',   'error'); return; }
+  if (!phoneVal) { FleetDB.showToast('Enter customer phone',  'error'); return; }
+
+  // If no existing customer selected, check for duplicate phone then create
+  if (!curCust || !curCust.id) {
+    const existing = FleetDB.getCustomerByPhone(phoneVal);
+    if (existing) {
+      if (!confirm(`Phone ${phoneVal} is already registered to "${existing.name}".\n\nUse the existing customer record instead?`)) return;
+      selectCust(existing.id);
+      return;
+    }
+    curCust = FleetDB.addCustomer({ name: nameVal, phone: phoneVal });
+    FleetDB.showToast('New customer saved — ' + curCust.id);
+  } else if (curCust.name !== nameVal || curCust.phone !== phoneVal) {
+    // Update if name/phone changed
+    curCust = FleetDB.updateCustomer(curCust.id, { name: nameVal, phone: phoneVal });
+  }
+
+  const totalVehs = Object.values(selVehs).reduce((s, n) => s + n, 0);
+  if (!totalVehs) {
+    FleetDB.showToast('Select at least one vehicle', 'error'); return;
+  }
+
+  let reqDate;
+  if (svcType === 'pick_drop') {
+    if (!document.getElementById('fromLoc').value.trim()) { FleetDB.showToast('Enter pickup location',   'error'); return; }
+    if (!document.getElementById('toLoc').value.trim())   { FleetDB.showToast('Enter drop-off location', 'error'); return; }
+    reqDate = document.getElementById('pdDate').value;
+    if (!reqDate) { FleetDB.showToast('Select a date', 'error'); return; }
+  } else {
+    const fd = document.getElementById('tourFrom').value;
+    const td = document.getElementById('tourTo').value;
+    if (!fd) { FleetDB.showToast('Enter tour start date', 'error'); return; }
+    if (!td) { FleetDB.showToast('Enter tour end date',   'error'); return; }
+    if (td < fd) { FleetDB.showToast('End date must be after start date', 'error'); return; }
+    reqDate = fd;
+  }
+
+  const status   = forceStatus || document.getElementById('bkStatus').value;
+  const driverId = document.getElementById('tourDriver').value;
+
+  const payload = {
+    customerId:    curCust.id,
+    customerName:  curCust.name,
+    customerPhone: curCust.phone,
+    serviceType:   svcType,
+    fromLocation:  document.getElementById('fromLoc').value.trim(),
+    toLocation:    document.getElementById('toLoc').value.trim(),
+    tourFromDate:  document.getElementById('tourFrom').value,
+    tourToDate:    document.getElementById('tourTo').value,
+    requestedDate: reqDate,
+    vehicleIds:    Object.entries(selVehs).flatMap(([id, qty]) => Array(qty).fill(id)),
+    driverIds:     driverId ? [driverId] : [],
+    gross:         document.getElementById('bkGross').value || null,
+    commission:    document.getElementById('bkComm').value  || null,
+    status,
+    notes:         document.getElementById('bkNotes').value.trim(),
+  };
+
+  const editId = document.getElementById('editBkId').value;
+  const bk = editId ? FleetDB.updateBooking(editId, payload) : FleetDB.addBooking(payload);
+
+  // Sync customer status
+  if (status === 'hold') {
+    FleetDB.updateCustomer(curCust.id, { status: 'hold' });
+  } else if (status === 'confirmed' && curCust.status === 'hold') {
+    FleetDB.updateCustomer(curCust.id, { status: 'active' });
+  }
+  curCust = FleetDB.getCustomer(curCust.id);
+
+  FleetDB.showToast(status === 'hold'
+    ? '⏸ Saved as Hold — ' + bk.id
+    : '✓ Booking confirmed — ' + bk.id);
+
+  renderHoldQueue();
+  clearBkForm();
+  renderCustInfo(); // refresh history after save
+}
+
+/* ═══════════════════════ CLEAR BOOKING FORM ════════ */
+function clearBkForm() {
+  setSvc('tour');
+  ['fromLoc','toLoc','tourFrom','tourTo','bkNotes','bkGross','bkComm'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  pdPicker.setDate(FleetDB.today());
+  tourRangePicker.clear();
+  document.getElementById('tourDriver').value = '';
+  document.getElementById('bkStatus').value   = 'confirmed';
+  document.getElementById('finFields').style.display = 'none';
+  document.getElementById('finIcon').textContent     = '▸';
+  document.getElementById('editBkId').value          = '';
+  document.getElementById('editBadge').style.display = 'none';
+  selVehs = {};
+  renderVehicles();
+}
+</script>
+</body>
+</html>

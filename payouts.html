@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Payouts — Royal Motors</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar" id="topbar"></header>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main-content">
+    <div class="page-header">
+      <div><div class="page-title">Payouts</div><div class="page-subtitle">Vendor payment history</div></div>
+      <div class="page-actions">
+        <select class="form-select" style="width:180px;height:34px;" id="vendorF" onchange="payoutPage=0;render()">
+          <option value="">All Vendors</option>
+        </select>
+        <select class="form-select" style="width:140px;height:34px;" id="methodF" onchange="payoutPage=0;render()">
+          <option value="">All Methods</option>
+          <option>Bank Transfer</option>
+          <option>Cash</option>
+          <option>Cheque</option>
+        </select>
+        <button class="btn btn-primary" onclick="openNewPayoutModal()">⇄ Issue Payout</button>
+      </div>
+    </div>
+
+    <div class="grid-4 mb-5" id="pStats"></div>
+
+    <!-- Pending balances -->
+    <div style="margin-bottom:20px;">
+      <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px;">Pending Vendor Balances</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;" id="pendingCards"></div>
+    </div>
+
+    <div class="ledger-filter-row" style="margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <input type="date" class="form-input" style="height:32px;width:140px;" id="dFrom"/>
+      <span style="color:var(--text-muted);font-size:12px;">to</span>
+      <input type="date" class="form-input" style="height:32px;width:140px;" id="dTo"/>
+      <button class="btn btn-secondary btn-sm" onclick="payoutPage=0;render()">Filter</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearFilters()">Clear</button>
+      <div style="margin-left:auto;font-size:13px;color:var(--text-secondary);">
+        <span id="rowCount" style="font-weight:600;color:var(--text-primary);">—</span> payouts
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Date</th><th>Vendor</th><th>Method</th><th style="text-align:right;">Amount</th><th>Notes</th><th>Ref</th><th>Slip</th>
+        </tr></thead>
+        <tbody id="payoutBody"></tbody>
+      </table>
+    </div>
+    <div id="payoutPager"></div>
+  </main>
+</div>
+<nav class="mobile-nav" id="mobileNav"></nav>
+
+<!-- Payout Modal -->
+<div class="modal-overlay" id="payoutModal">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header"><div class="modal-title" id="payoutModalTitle">Issue Payout</div><button class="icon-btn" onclick="FleetDB.closeModal('payoutModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Vendor <span class="required">*</span></label>
+        <select class="form-select" id="npVendor" onchange="updatePayBal()"><option value="">— Select —</option></select>
+      </div>
+      <div id="npBal" style="display:none;padding:14px 16px;border-radius:var(--r-md);background:var(--accent-subtle);border:1px solid var(--accent-border);margin-bottom:16px;">
+        <div style="font-size:11px;color:var(--accent);">Available Balance</div>
+        <div class="mono fw-bold" style="font-size:26px;color:var(--accent);" id="npBalAmt">—</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Amount <span class="required">*</span></label>
+          <div class="input-group"><span class="input-prefix">₨</span><input type="number" class="form-input" id="npAmt"/></div>
+        </div>
+        <div class="form-group"><label class="form-label">Method</label>
+          <select class="form-select" id="npMethod"><option>Bank Transfer</option><option>Cash</option><option>Cheque</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="npDate"/></div>
+        <div class="form-group"><label class="form-label">Notes</label><input type="text" class="form-input" id="npNotes" placeholder="Ref…"/></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="FleetDB.closeModal('payoutModal')">Cancel</button>
+      <button class="btn btn-primary" style="background:var(--emerald);" onclick="confirmPayout()">✓ Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase (cloud sync + auth) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-sync.js"></script>
+<script src="data.js"></script>
+<script>
+FleetDB.init('payouts.html');
+document.getElementById('npDate').value = FleetDB.today();
+const PAGE_SIZE = 50;
+let payoutPage = 0;
+let editingPayoutId = null;
+function gotoPayoutPage(p) { payoutPage = p; render(); }
+
+FleetDB.getVendors().forEach(v => {
+  const o = document.createElement('option'); o.value = v.id; o.textContent = v.name;
+  document.getElementById('npVendor').appendChild(o);
+  const o2 = o.cloneNode(true);
+  document.getElementById('vendorF').appendChild(o2);
+});
+
+function render() {
+  const vf = document.getElementById('vendorF').value;
+  const mf = document.getElementById('methodF').value;
+  const dFrom = document.getElementById('dFrom').value;
+  const dTo   = document.getElementById('dTo').value;
+  const vendors = FleetDB.getVendors();
+
+  let payouts = FleetDB.getPayouts().filter(p =>
+    (!vf || p.vendorId === vf) &&
+    (!mf || p.method === mf) &&
+    (!dFrom || p.date >= dFrom) &&
+    (!dTo   || p.date <= dTo)
+  );
+
+  // Stats
+  const total   = FleetDB.getPayouts().reduce((s,p)=>s+(p.amount||0),0);
+  const thisMonth = new Date().toISOString().slice(0,7);
+  const monthPay  = FleetDB.getPayouts().filter(p=>p.date.startsWith(thisMonth)).reduce((s,p)=>s+(p.amount||0),0);
+  const totalLiab = vendors.reduce((s,v)=>s+Math.max(0,FleetDB.getVendorBalance(v.id)),0);
+  document.getElementById('pStats').innerHTML = [
+    ['Total Payouts', FleetDB.getPayouts().length, ''],
+    ['Lifetime Paid', FleetDB.fmtMoney(total), 'color:var(--emerald)'],
+    ['This Month', FleetDB.fmtMoney(monthPay), 'color:var(--accent)'],
+    ['Pending Liability', FleetDB.fmtMoney(totalLiab), 'color:var(--amber)'],
+  ].map(([l,v,s])=>`<div class="card" style="padding:14px;">
+    <div style="font-size:10px;color:var(--text-muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:5px;">${l}</div>
+    <div style="font-size:20px;font-weight:700;${s}">${v}</div>
+  </div>`).join('');
+
+  // Pending balance cards
+  document.getElementById('pendingCards').innerHTML = vendors.map(v => {
+    const bal = FleetDB.getVendorBalance(v.id);
+    if (bal <= 0) return '';
+    const E = FleetDB.escapeHtml;
+    return `<div class="card" style="padding:12px;cursor:pointer;border:1px solid ${v.color}44;" onclick="quickPayout('${v.id}')">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+        <div style="width:20px;height:20px;border-radius:3px;background:${v.color}33;color:${v.color};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;">${E(v.name[0])}</div>
+        <span style="font-size:12px;font-weight:600;">${E(v.name)}</span>
+      </div>
+      <div class="mono fw-bold" style="font-size:15px;color:var(--amber);">${FleetDB.fmtMoney(bal)}</div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">Click to pay out</div>
+    </div>`;
+  }).join('') || '<div style="font-size:13px;color:var(--text-muted);">All balances cleared ✓</div>';
+
+  document.getElementById('rowCount').textContent = payouts.length;
+  const payDisplay = payouts.slice(payoutPage * PAGE_SIZE, (payoutPage + 1) * PAGE_SIZE);
+  document.getElementById('payoutBody').innerHTML = payDisplay.map(p => {
+    const v = vendors.find(x => x.id === p.vendorId);
+    const vnBadge = v ? `<span style="display:inline-flex;align-items:center;gap:5px;">
+      <span style="width:18px;height:18px;border-radius:3px;background:${v.color}33;color:${v.color};display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;">${E(v.name[0])}</span>${E(v.name)}</span>` : '—';
+    return `<tr>
+      <td class="td-mono">${p.date}</td>
+      <td>${vnBadge}</td>
+      <td><span class="badge badge-teal">${E(p.method)}</span></td>
+      <td style="text-align:right;" class="td-amount positive">PKR ${(p.amount||0).toLocaleString()}</td>
+      <td style="font-size:12px;color:var(--text-secondary);">${E(p.notes||'—')}</td>
+      <td class="td-mono">${p.id}</td>
+      <td><div style="display:flex;gap:5px;"><button class="btn btn-secondary btn-sm" onclick="editPayout('${p.id}')">Edit</button><button class="btn btn-sm" style="color:var(--red);border:1px solid rgba(239,68,68,.2);" onclick="deletePayoutConfirm('${p.id}')">Del</button><button class="btn btn-sm" style="background:var(--accent-subtle);color:var(--accent);border:1px solid var(--accent-border);" onclick="printPayoutSlip('${p.id}')">Slip</button></div></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-muted);">No payouts found</td></tr>';
+  document.getElementById('payoutPager').innerHTML = FleetDB.pagerHTML(payouts.length, payoutPage, PAGE_SIZE, 'gotoPayoutPage');
+}
+
+function openNewPayoutModal() {
+  editingPayoutId = null;
+  document.getElementById('payoutModalTitle').textContent = 'Issue Payout';
+  document.getElementById('npVendor').value    = '';
+  document.getElementById('npVendor').disabled = false;
+  document.getElementById('npAmt').value       = '';
+  document.getElementById('npNotes').value     = '';
+  document.getElementById('npDate').value      = FleetDB.today();
+  document.getElementById('npBal').style.display = 'none';
+  FleetDB.openModal('payoutModal');
+}
+
+function quickPayout(vendorId) {
+  editingPayoutId = null;
+  document.getElementById('payoutModalTitle').textContent = 'Issue Payout';
+  document.getElementById('npVendor').disabled = false;
+  const bal = FleetDB.getVendorBalance(vendorId);
+  document.getElementById('npVendor').value = vendorId;
+  document.getElementById('npBalAmt').textContent = FleetDB.fmtMoney(bal);
+  document.getElementById('npBal').style.display = 'block';
+  document.getElementById('npAmt').value = Math.max(0, bal);
+  FleetDB.openModal('payoutModal');
+}
+
+function updatePayBal() {
+  const id = document.getElementById('npVendor').value;
+  if (!id) { document.getElementById('npBal').style.display='none'; return; }
+  const bal = FleetDB.getVendorBalance(id);
+  document.getElementById('npBalAmt').textContent = FleetDB.fmtMoney(bal);
+  document.getElementById('npAmt').value = Math.max(0, bal);
+  document.getElementById('npBal').style.display = 'block';
+}
+
+function confirmPayout() {
+  const vendorId = document.getElementById('npVendor').value;
+  const amt      = parseFloat(document.getElementById('npAmt').value) || 0;
+  if (!vendorId && !editingPayoutId) { FleetDB.showToast('Select a vendor', 'error'); return; }
+  if (!amt || amt <= 0) { FleetDB.showToast('Enter a valid amount', 'error'); return; }
+
+  if (!editingPayoutId) {
+    const bal = FleetDB.getVendorBalance(vendorId);
+    if (amt > bal && !confirm(`Amount ${FleetDB.fmtMoney(amt)} exceeds available balance ${FleetDB.fmtMoney(bal)}.\n\nProceed with overpayment?`)) return;
+  }
+
+  const data = {
+    amount: amt,
+    method: document.getElementById('npMethod').value,
+    date:   document.getElementById('npDate').value || FleetDB.today(),
+    notes:  document.getElementById('npNotes').value,
+  };
+
+  if (editingPayoutId) {
+    FleetDB.updatePayout(editingPayoutId, data);
+    FleetDB.showToast('Payout updated — ' + FleetDB.fmtMoney(amt));
+  } else {
+    FleetDB.addPayout({ vendorId, ...data });
+    FleetDB.showToast('Payout recorded — ' + FleetDB.fmtMoney(amt));
+  }
+  editingPayoutId = null;
+  FleetDB.closeModal('payoutModal');
+  render();
+}
+
+function editPayout(id) {
+  const p = FleetDB.getPayouts().find(x => x.id === id);
+  if (!p) return;
+  editingPayoutId = id;
+  document.getElementById('payoutModalTitle').textContent = 'Edit Payout';
+  document.getElementById('npVendor').value   = p.vendorId;
+  document.getElementById('npAmt').value      = p.amount;
+  document.getElementById('npMethod').value   = p.method;
+  document.getElementById('npDate').value     = p.date;
+  document.getElementById('npNotes').value    = p.notes || '';
+  const banner = document.getElementById('npBal');
+  banner.style.display = 'none'; // hide balance banner in edit mode
+  document.getElementById('npVendor').disabled = true;
+  FleetDB.openModal('payoutModal');
+}
+
+function deletePayoutConfirm(id) {
+  const p = FleetDB.getPayouts().find(x => x.id === id);
+  if (!p || !confirm(`Delete payout of ${FleetDB.fmtMoney(p.amount)}?\n\nThis will restore the vendor balance. Cannot be undone.`)) return;
+  FleetDB.deletePayout(id);
+  FleetDB.showToast('Payout deleted', 'error');
+  render();
+}
+
+function clearFilters() {
+  ['vendorF','methodF','dFrom','dTo'].forEach(id => document.getElementById(id).value='');
+  render();
+}
+
+function printPayoutSlip(id) {
+  const html = FleetDB.buildPayoutReceiptHTML(id);
+  if (!html) { FleetDB.showToast('Payout not found', 'error'); return; }
+  FleetDB.openPrintWindow(html);
+}
+
+render();
+</script>
+</body>
+</html>

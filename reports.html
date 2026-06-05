@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Reports — Royal Motors</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"/>
+  <link rel="stylesheet" href="styles.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar" id="topbar"></header>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main-content">
+    <div class="page-header">
+      <div><div class="page-title">Reports</div><div class="page-subtitle">Business analytics & insights</div></div>
+      <div class="page-actions">
+        <select class="form-select" style="width:130px;height:34px;" id="rangeF" onchange="buildReports()">
+          <option value="7">Last 7 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="60">Last 60 days</option>
+          <option value="90">Last 90 days</option>
+        </select>
+        <button class="btn btn-secondary" onclick="exportCSV()">⬇ Export CSV</button>
+      </div>
+    </div>
+
+    <!-- KPI row -->
+    <div class="grid-4 mb-5" id="kpiRow"></div>
+
+    <!-- Charts row -->
+    <div class="grid-2 mb-5" id="chartsRow">
+      <div class="card" style="padding:20px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:16px;">Daily Revenue</div>
+        <canvas id="revenueChart" height="200"></canvas>
+      </div>
+      <div class="card" style="padding:20px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:16px;">Revenue by Vendor</div>
+        <canvas id="vendorChart" height="200"></canvas>
+      </div>
+    </div>
+
+    <!-- Tables row -->
+    <div class="grid-2" id="tablesRow">
+      <!-- Top vendors -->
+      <div class="card" style="padding:20px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:14px;">Vendor Performance</div>
+        <table><thead><tr><th>Vendor</th><th style="text-align:right;">Trips</th><th style="text-align:right;">Revenue</th><th style="text-align:right;">Net</th></tr></thead>
+        <tbody id="vendorPerfBody"></tbody></table>
+      </div>
+      <!-- Top vehicles -->
+      <div class="card" style="padding:20px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:14px;">Vehicle Performance</div>
+        <table><thead><tr><th>Plate</th><th style="text-align:right;">Trips</th><th style="text-align:right;">Revenue</th><th style="text-align:right;">Avg/Trip</th></tr></thead>
+        <tbody id="vehiclePerfBody"></tbody></table>
+      </div>
+    </div>
+  </main>
+</div>
+<nav class="mobile-nav" id="mobileNav"></nav>
+
+<!-- Firebase (cloud sync + auth) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-sync.js"></script>
+<script src="data.js"></script>
+<script>
+FleetDB.init('reports.html');
+
+let revChart, venChart;
+
+function buildReports() {
+  const days  = parseInt(document.getElementById('rangeF').value)||30;
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
+  const cutoffStr = cutoff.toISOString().slice(0,10);
+
+  const trips   = FleetDB.getTrips().filter(t => t.status !== 'cancelled' && t.date >= cutoffStr);
+  const vendors  = FleetDB.getVendors();
+  const vehicles = FleetDB.getVehicles();
+
+  const totRev  = trips.reduce((s,t)=>s+(t.gross||0),0);
+  const totComm = trips.reduce((s,t)=>s+(t.commission||0),0);
+  const totNet  = trips.reduce((s,t)=>s+(t.net||0),0);
+  const totExp  = trips.reduce((s,t)=>s+(t.expenses||0),0);
+
+  document.getElementById('kpiRow').innerHTML = [
+    ['Total Revenue',  FleetDB.fmtMoney(totRev),  'color:var(--text-primary)'],
+    ['Commission',     FleetDB.fmtMoney(totComm), 'color:var(--amber)'],
+    ['Vendor Net',     FleetDB.fmtMoney(totNet),  'color:var(--emerald)'],
+    ['Total Trips',    trips.length,               'color:var(--accent)'],
+  ].map(([l,v,s])=>`<div class="card" style="padding:14px;">
+    <div style="font-size:10px;color:var(--text-muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:5px;">${l}</div>
+    <div style="font-size:22px;font-weight:700;${s}">${v}</div>
+  </div>`).join('');
+
+  // Daily revenue chart
+  const byDay = {};
+  trips.forEach(t => { byDay[t.date] = (byDay[t.date]||0) + (t.gross||0); });
+  const dayLabels = Object.keys(byDay).sort();
+  const dayVals   = dayLabels.map(d => byDay[d]);
+
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const textColor = isDark ? '#8fa8b0' : '#64748b';
+
+  if (revChart) revChart.destroy();
+  revChart = new Chart(document.getElementById('revenueChart'), {
+    type: 'line',
+    data: {
+      labels: dayLabels.map(d => d.slice(5)),
+      datasets: [{ label:'Revenue', data: dayVals, borderColor:'#2A9D8F', backgroundColor:'rgba(42,157,143,0.1)', tension:0.3, fill:true, pointRadius:2 }]
+    },
+    options: { responsive:true, plugins:{legend:{display:false}}, scales:{
+      x:{grid:{color:gridColor},ticks:{color:textColor,maxTicksLimit:10}},
+      y:{grid:{color:gridColor},ticks:{color:textColor,callback:v=>'₨'+FleetDB.fmtK(v)}}
+    }}
+  });
+
+  // Vendor pie chart
+  const vData = vendors.map(v => ({
+    name: v.name, color: v.color,
+    rev: trips.filter(t=>t.vendorId===v.id).reduce((s,t)=>s+(t.gross||0),0)
+  })).filter(v=>v.rev>0);
+
+  if (venChart) venChart.destroy();
+  venChart = new Chart(document.getElementById('vendorChart'), {
+    type: 'doughnut',
+    data: {
+      labels: vData.map(v=>v.name),
+      datasets:[{ data:vData.map(v=>v.rev), backgroundColor:vData.map(v=>v.color+'cc'), borderWidth:0 }]
+    },
+    options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{ color:textColor, padding:12, font:{size:11} } } } }
+  });
+
+  // Vendor performance table
+  const vendorPerf = vendors.map(v => {
+    const vTrips = trips.filter(t=>t.vendorId===v.id);
+    return { name:v.name, color:v.color, count:vTrips.length,
+      rev:vTrips.reduce((s,t)=>s+(t.gross||0),0), net:vTrips.reduce((s,t)=>s+(t.net||0),0) };
+  }).sort((a,b)=>b.rev-a.rev);
+
+  document.getElementById('vendorPerfBody').innerHTML = vendorPerf.map(v =>
+    `<tr>
+      <td><span style="display:inline-flex;align-items:center;gap:5px;">
+        <span style="width:18px;height:18px;border-radius:3px;background:${v.color}33;color:${v.color};display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;">${FleetDB.escapeHtml(v.name[0])}</span>
+        <span style="font-size:13px;">${FleetDB.escapeHtml(v.name)}</span></span></td>
+      <td style="text-align:right;" class="td-mono">${v.count}</td>
+      <td style="text-align:right;" class="td-amount">${FleetDB.fmtMoney(v.rev)}</td>
+      <td style="text-align:right;" class="td-amount positive">${FleetDB.fmtMoney(v.net)}</td>
+    </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px;">No data</td></tr>';
+
+  // Vehicle performance table
+  const vehiclePerf = vehicles.map(v => {
+    const vTrips = trips.filter(t=>t.vehicleId===v.id);
+    const rev = vTrips.reduce((s,t)=>s+(t.gross||0),0);
+    return { plate:v.plate, count:vTrips.length, rev, avg: vTrips.length ? Math.round(rev/vTrips.length) : 0 };
+  }).filter(v=>v.count>0).sort((a,b)=>b.rev-a.rev).slice(0,10);
+
+  document.getElementById('vehiclePerfBody').innerHTML = vehiclePerf.map(v =>
+    `<tr>
+      <td style="font-weight:600;font-family:var(--mono);font-size:12px;">${FleetDB.escapeHtml(v.plate)}</td>
+      <td style="text-align:right;" class="td-mono">${v.count}</td>
+      <td style="text-align:right;" class="td-amount">${FleetDB.fmtMoney(v.rev)}</td>
+      <td style="text-align:right;" class="td-amount positive">${FleetDB.fmtMoney(v.avg)}</td>
+    </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px;">No data</td></tr>';
+}
+
+function exportCSV() {
+  const days  = parseInt(document.getElementById('rangeF').value)||30;
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-days);
+  const cutoffStr = cutoff.toISOString().slice(0,10);
+  const trips = FleetDB.getTrips().filter(t=>t.status!=='cancelled'&&t.date>=cutoffStr);
+  const vehicles = FleetDB.getVehicles(), vendors=FleetDB.getVendors(), drivers=FleetDB.getDrivers();
+  const rows = [['Trip ID','Date','Plate','Vendor','Driver','Revenue','Commission','Expenses','Net','Status']];
+  trips.forEach(t=>{
+    const v=vehicles.find(x=>x.id===t.vehicleId),vn=vendors.find(x=>x.id===t.vendorId),d=drivers.find(x=>x.id===t.driverId);
+    rows.push([t.id,t.date,v?v.plate:'',vn?vn.name:'',d?d.name:'',t.gross,t.commission,t.expenses,t.net,t.status]);
+  });
+  const csv=rows.map(r=>r.join(',')).join('\n');
+  const a=document.createElement('a');a.href='data:text/csv,'+encodeURIComponent(csv);a.download='fleet-report.csv';a.click();
+}
+
+buildReports();
+</script>
+</body>
+</html>

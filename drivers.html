@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Drivers — Royal Motors</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar" id="topbar"></header>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main-content">
+    <div class="page-header">
+      <div><div class="page-title">Drivers</div><div class="page-subtitle" id="dSubtitle">Loading…</div></div>
+      <div class="page-actions">
+        <select class="form-select" style="width:130px;height:34px;" id="statusF" onchange="driverPage=0;renderDrivers()">
+          <option value="">All Status</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+        <button class="btn btn-primary" id="addDriverBtn">+ Add Driver</button>
+      </div>
+    </div>
+
+    <div class="grid-4 mb-5" id="dStats"></div>
+
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:12px;">
+      <div class="topbar-search" style="width:260px;">
+        <span class="search-icon">⌕</span>
+        <input type="text" placeholder="Search name, phone, CNIC…" id="dSearch" aria-label="Search drivers"/>
+      </div>
+      <div style="margin-left:auto;font-size:13px;color:var(--text-secondary);">
+        <span id="rowCount" style="font-weight:600;color:var(--text-primary);">—</span> drivers
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Name</th><th>Phone</th><th>CNIC</th><th>Assigned Vehicle</th><th>Salary/Month</th>
+          <th>Status</th><th style="text-align:right;">Trips</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="driverBody"></tbody>
+      </table>
+    </div>
+    <div id="dPager"></div>
+  </main>
+</div>
+<nav class="mobile-nav" id="mobileNav"></nav>
+
+<!-- Add/Edit Driver Modal -->
+<div class="modal-overlay" id="driverModal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <div class="modal-title" id="dModalTitle">Add Driver</div>
+      <button class="icon-btn" onclick="FleetDB.closeModal('driverModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="dId"/>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Full Name <span class="required">*</span></label>
+          <input type="text" class="form-input" id="dName" placeholder="e.g. Ali Hassan"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-select" id="dStatus">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Phone</label>
+          <input type="text" class="form-input" id="dPhone" placeholder="03xx-xxxxxxx"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">CNIC</label>
+          <input type="text" class="form-input" id="dCnic" placeholder="xxxxx-xxxxxxx-x"/>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Monthly Salary (PKR)</label>
+          <div class="input-group"><span class="input-prefix">₨</span><input type="number" class="form-input" id="dSalary" placeholder="25000"/></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">License No.</label>
+          <input type="text" class="form-input" id="dLicense" placeholder="DL-xxxxx"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <input type="text" class="form-input" id="dNotes" placeholder="Optional…"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="FleetDB.closeModal('driverModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDriver()">Save Driver</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase (cloud sync + auth) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-sync.js"></script>
+<script src="data.js"></script>
+<script>
+FleetDB.init('drivers.html');
+const PAGE_SIZE = 50;
+let driverPage = 0;
+function gotoDriverPage(p) { driverPage = p; renderDrivers(); }
+
+document.getElementById('addDriverBtn').onclick = function() {
+  clearForm(); FleetDB.openModal('driverModal');
+};
+
+function renderDrivers() {
+  const q  = (document.getElementById('dSearch').value||'').toLowerCase();
+  const sf = document.getElementById('statusF').value;
+  const vehicles = FleetDB.getVehicles();
+  const trips    = FleetDB.getTrips().filter(t => t.status !== 'cancelled');
+
+  const all = FleetDB.getDrivers().filter(d => {
+    const matchQ = !q || d.name.toLowerCase().includes(q) ||
+      (d.phone||'').toLowerCase().includes(q) || (d.cnic||'').toLowerCase().includes(q);
+    return matchQ && (!sf || d.status === sf);
+  });
+
+  const active = FleetDB.getDrivers().filter(d => d.status === 'active').length;
+  const totSalary = FleetDB.getDrivers().filter(d=>d.status==='active').reduce((s,d)=>s+(d.salary||0),0);
+  document.getElementById('dStats').innerHTML = [
+    ['Total Drivers', FleetDB.getDrivers().length, ''],
+    ['Active', active, 'color:var(--emerald)'],
+    ['Monthly Payroll', FleetDB.fmtMoney(totSalary), 'color:var(--amber)'],
+    ['Total Trips', trips.length, 'color:var(--accent)'],
+  ].map(([l,v,s]) => `<div class="card" style="padding:14px;">
+    <div style="font-size:10px;color:var(--text-muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:5px;">${l}</div>
+    <div style="font-size:20px;font-weight:700;${s}">${v}</div>
+  </div>`).join('');
+
+  document.getElementById('dSubtitle').textContent = all.length + ' drivers';
+  document.getElementById('rowCount').textContent = all.length;
+
+  const display = all.slice(driverPage * PAGE_SIZE, (driverPage + 1) * PAGE_SIZE);
+  document.getElementById('driverBody').innerHTML = display.map(d => {
+    const assignedVehicle = vehicles.find(v => v.driverId === d.id);
+    const dTrips = trips.filter(t => t.driverId === d.id);
+    const E = FleetDB.escapeHtml;
+    return `<tr>
+      <td style="font-weight:600;font-size:13px;">${E(d.name)}</td>
+      <td class="td-mono" style="font-size:12px;">${E(d.phone||'—')}</td>
+      <td class="td-mono" style="font-size:12px;">${E(d.cnic||'—')}</td>
+      <td style="font-size:13px;font-family:var(--mono);font-weight:600;">${assignedVehicle?E(assignedVehicle.plate):'<span style="color:var(--text-muted);font-family:var(--sans);font-weight:400;">None</span>'}</td>
+      <td class="td-amount">${d.salary ? FleetDB.fmtMoney(d.salary) : '—'}</td>
+      <td><span class="badge ${d.status==='active'?'badge-green':'badge-muted'}">${E(d.status)}</span></td>
+      <td style="text-align:right;" class="td-mono">${dTrips.length}</td>
+      <td><div style="display:flex;gap:5px;"><button class="btn btn-secondary btn-sm" onclick="editDriver('${d.id}')">Edit</button><button class="btn btn-sm" style="color:var(--red);border:1px solid rgba(239,68,68,.2);" onclick="deleteDriverConfirm('${d.id}')">Del</button></div></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-muted);">No drivers found</td></tr>';
+  document.getElementById('dPager').innerHTML = FleetDB.pagerHTML(all.length, driverPage, PAGE_SIZE, 'gotoDriverPage');
+}
+
+function editDriver(id) {
+  const d = FleetDB.getDrivers().find(x => x.id === id);
+  if (!d) return;
+  document.getElementById('dId').value      = d.id;
+  document.getElementById('dName').value    = d.name;
+  document.getElementById('dPhone').value   = d.phone||'';
+  document.getElementById('dCnic').value    = d.cnic||'';
+  document.getElementById('dSalary').value  = d.salary||'';
+  document.getElementById('dLicense').value = d.license||'';
+  document.getElementById('dNotes').value   = d.notes||'';
+  document.getElementById('dStatus').value  = d.status||'active';
+  document.getElementById('dModalTitle').textContent = 'Edit Driver';
+  FleetDB.openModal('driverModal');
+}
+
+function saveDriver() {
+  const name      = document.getElementById('dName').value.trim();
+  const cnic      = document.getElementById('dCnic').value.trim();
+  const editingId = document.getElementById('dId').value;
+  if (!name) { FleetDB.showToast('Name required','error'); return; }
+  if (cnic) {
+    const dup = FleetDB.getDrivers().find(d => d.cnic === cnic && d.id !== editingId);
+    if (dup) { FleetDB.showToast('CNIC already registered to ' + dup.name, 'error'); return; }
+  }
+  const data = {
+    name,
+    phone:   document.getElementById('dPhone').value.trim(),
+    cnic:    document.getElementById('dCnic').value.trim(),
+    salary:  parseFloat(document.getElementById('dSalary').value)||0,
+    license: document.getElementById('dLicense').value.trim(),
+    notes:   document.getElementById('dNotes').value.trim(),
+    status:  document.getElementById('dStatus').value,
+  };
+  const id = document.getElementById('dId').value;
+  if (id) FleetDB.updateDriver(id, data);
+  else    FleetDB.addDriver(data);
+  FleetDB.closeModal('driverModal');
+  FleetDB.showToast(id ? 'Driver updated' : 'Driver added');
+  renderDrivers();
+}
+
+function clearForm() {
+  ['dId','dName','dPhone','dCnic','dSalary','dLicense','dNotes'].forEach(i => document.getElementById(i).value='');
+  document.getElementById('dStatus').value = 'active';
+  document.getElementById('dModalTitle').textContent = 'Add Driver';
+}
+
+function deleteDriverConfirm(id) {
+  const d = FleetDB.getDrivers().find(x => x.id === id);
+  if (!d) return;
+  const trips    = FleetDB.getTrips().filter(t => t.driverId === id);
+  const assigned = FleetDB.getVehicles().find(v => v.driverId === id);
+  let msg = `Delete driver "${d.name}"?`;
+  if (assigned) msg += `\n\nWarning: assigned to vehicle ${assigned.plate}.`;
+  if (trips.length) msg += `\n${trips.length} trip record(s) reference this driver.`;
+  msg += '\n\nThis cannot be undone.';
+  if (!confirm(msg)) return;
+  FleetDB.deleteDriver(id);
+  FleetDB.showToast(`Driver "${d.name}" deleted`, 'error');
+  renderDrivers();
+}
+
+document.getElementById('dSearch').oninput = FleetDB.debounce(() => { driverPage = 0; renderDrivers(); }, 280);
+renderDrivers();
+</script>
+</body>
+</html>

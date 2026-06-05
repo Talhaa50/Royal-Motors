@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Settings — Royal Motors</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar" id="topbar"></header>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main-content">
+    <div class="page-header">
+      <div><div class="page-title">Settings</div><div class="page-subtitle">Preferences & data management</div></div>
+    </div>
+
+    <div class="settings-grid">
+
+      <!-- Appearance -->
+      <div class="card" style="padding:24px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:18px;color:var(--text-primary);">Appearance</div>
+        <div class="form-group">
+          <label class="form-label">Theme</label>
+          <div style="display:flex;gap:10px;margin-top:6px;">
+            <button class="btn btn-secondary" id="themeDark" onclick="setTheme('dark')" style="flex:1;">🌙 Dark</button>
+            <button class="btn btn-secondary" id="themeLight" onclick="setTheme('light')" style="flex:1;">☀️ Light</button>
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:16px;">
+          <label class="form-label">Company Name</label>
+          <input type="text" class="form-input" id="companyName" placeholder="Royal Motors"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Currency Symbol</label>
+          <input type="text" class="form-input" id="currency" placeholder="PKR" style="max-width:100px;"/>
+        </div>
+        <button class="btn btn-primary" style="margin-top:8px;width:100%;" onclick="saveAppearance()">Save</button>
+      </div>
+
+      <!-- Commission defaults -->
+      <div class="card" style="padding:24px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:18px;color:var(--text-primary);">Commission Defaults</div>
+        <div class="form-group">
+          <label class="form-label">Default Commission %</label>
+          <input type="number" class="form-input" id="defComm" placeholder="15" min="0" max="100"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quick-set Buttons (comma separated)</label>
+          <input type="text" class="form-input" id="quickComm" placeholder="10,12,15,18,20"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Balance Alert Threshold (PKR)</label>
+          <div class="input-group"><span class="input-prefix">₨</span><input type="number" class="form-input" id="alertThreshold" placeholder="100000"/></div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Dashboard shows alert when vendor balance exceeds this</div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:8px;width:100%;" onclick="saveCommSettings()">Save</button>
+      </div>
+
+      <!-- Data summary -->
+      <div class="card" style="padding:24px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:18px;color:var(--text-primary);">Data Summary</div>
+        <div id="dataSummary" style="display:flex;flex-direction:column;gap:10px;"></div>
+      </div>
+
+      <!-- Account & Security -->
+      <div class="card" style="padding:24px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:var(--text-primary);">Account &amp; Security</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:18px;">Change your Firebase Auth password.</div>
+        <div class="form-group">
+          <label class="form-label">Signed in as</label>
+          <input type="text" class="form-input" id="authEmailDisplay" readonly style="opacity:.7;cursor:default;background:var(--bg-elevated);"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">New Password</label>
+          <input type="password" class="form-input" id="authPass" placeholder="Min 6 characters" autocomplete="new-password"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confirm Password</label>
+          <input type="password" class="form-input" id="authPassConfirm" placeholder="Re-enter new password" autocomplete="new-password"/>
+        </div>
+        <button class="btn btn-primary" style="width:100%;" onclick="changePassword()">Update Password</button>
+        <div style="margin-top:12px;">
+          <button class="btn btn-danger" style="width:100%;" onclick="FleetDB.logout()">⇥ Sign Out</button>
+        </div>
+      </div>
+
+      <!-- Backup & Restore -->
+      <div class="card" style="padding:24px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:var(--text-primary);">Backup &amp; Restore</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:18px;">Export all data as a JSON file, or import a previous backup to restore.</div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <button class="btn btn-secondary" onclick="exportBackup()">⬇ Export Backup (JSON)</button>
+          <label class="btn btn-secondary" style="cursor:pointer;text-align:center;">
+            ⬆ Import Backup (JSON)
+            <input type="file" accept=".json" style="display:none;" onchange="importBackup(event)"/>
+          </label>
+        </div>
+        <div style="margin-top:12px;padding:10px 12px;border-radius:var(--r-sm);background:var(--bg-elevated);font-size:11px;color:var(--text-muted);">
+          Backup includes: vendors, vehicles, drivers, trips, payouts, salary payments, and settings.
+        </div>
+      </div>
+
+      <!-- Deleted Records & Audit Log -->
+      <div class="card" style="padding:24px;grid-column:1/-1;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--text-primary);">Deleted Records &amp; Audit Log</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Records are soft-deleted — they stay here and can be restored anytime.</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <select class="form-select" style="width:140px;height:32px;" id="auditEntityFilter" onchange="renderAudit()">
+              <option value="">All Types</option>
+              <option value="vendor">Vendors</option>
+              <option value="vehicle">Vehicles</option>
+              <option value="driver">Drivers</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Deleted records tabs -->
+        <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" id="tabDeleted" onclick="showAuditTab('deleted')" style="background:var(--accent-subtle);color:var(--accent);">Deleted Records</button>
+          <button class="btn btn-secondary btn-sm" id="tabLog" onclick="showAuditTab('log')">Activity Log</button>
+        </div>
+
+        <div id="deletedRecordsPanel">
+          <div id="deletedList" style="display:flex;flex-direction:column;gap:6px;"></div>
+        </div>
+        <div id="activityLogPanel" style="display:none;">
+          <div class="table-wrap" style="border:none;box-shadow:none;">
+            <table>
+              <thead><tr><th>Ref</th><th>Action</th><th>Type</th><th>Name</th><th>By</th><th>Date &amp; Time</th></tr></thead>
+              <tbody id="auditLogBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Danger zone -->
+      <div class="card" style="padding:24px;border:1px solid var(--red)22;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:var(--red);">Danger Zone</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:18px;">These actions cannot be undone.</div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <button class="btn btn-danger" onclick="clearTrips()">🗑 Clear All Trips</button>
+          <button class="btn btn-danger" onclick="clearPayouts()">🗑 Clear All Payouts</button>
+          <button class="btn btn-danger" onclick="doCleanSlate()" style="background:#e76f51;color:#111;">🆕 Clean Slate — New Client Setup</button>
+          <button class="btn btn-danger" onclick="resetAll()" style="background:var(--red);">⚠ Full Reset (reloads demo data)</button>
+        </div>
+        <div style="margin-top:16px;padding:10px 12px;border-radius:var(--r-sm);background:var(--bg-elevated);font-size:11px;color:var(--text-muted);">
+          <strong>Clean Slate</strong> — wipes all vendors, vehicles, drivers, trips &amp; customers. Keeps your login &amp; settings. Use this when handing the system to a new client.<br/>
+          <strong>Full Reset</strong> — wipes everything and reloads demo/test data.
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<nav class="mobile-nav" id="mobileNav"></nav>
+
+<!-- Firebase (cloud sync + auth) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-sync.js"></script>
+<script src="data.js"></script>
+<script>
+FleetDB.init('settings.html');
+
+function loadSettings() {
+  const s = FleetDB.getSettings();
+  document.getElementById('companyName').value    = s.companyName   || '';
+  document.getElementById('currency').value       = s.currency      || 'PKR';
+  document.getElementById('defComm').value        = s.defComm       || '15';
+  document.getElementById('quickComm').value      = (s.quickComm||[10,12,15,18,20]).join(',');
+  document.getElementById('alertThreshold').value = s.alertThreshold|| '100000';
+  if (window.fbAuth && window.fbAuth.currentUser)
+    document.getElementById('authEmailDisplay').value = window.fbAuth.currentUser.email || '';
+
+  // Theme buttons
+  const theme = FleetDB.getTheme();
+  document.getElementById('themeDark').classList.toggle('btn-primary', theme==='dark');
+  document.getElementById('themeLight').classList.toggle('btn-primary', theme==='light');
+
+  // Data summary
+  document.getElementById('dataSummary').innerHTML = [
+    ['Vendors',          FleetDB.getVendors().length],
+    ['Vehicles',         FleetDB.getVehicles().length],
+    ['Drivers',          FleetDB.getDrivers().length],
+    ['Trips',            FleetDB.getTrips().length],
+    ['Payouts',          FleetDB.getPayouts().length],
+    ['Salary Payments',  FleetDB.getSalaryPayments().length],
+  ].map(([l,v])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
+    <span style="font-size:13px;color:var(--text-secondary);">${l}</span>
+    <span style="font-size:14px;font-weight:600;font-family:var(--mono);">${v}</span>
+  </div>`).join('');
+}
+
+function setTheme(t) {
+  FleetDB.setTheme(t);
+  document.getElementById('themeDark').classList.toggle('btn-primary', t==='dark');
+  document.getElementById('themeLight').classList.toggle('btn-primary', t==='light');
+  document.getElementById('themeDark').classList.toggle('btn-secondary', t!=='dark');
+  document.getElementById('themeLight').classList.toggle('btn-secondary', t!=='light');
+}
+
+function saveAppearance() {
+  FleetDB.updateSettings({
+    companyName: document.getElementById('companyName').value.trim(),
+    currency:    document.getElementById('currency').value.trim() || 'PKR',
+  });
+  FleetDB.showToast('Appearance saved');
+}
+
+function saveCommSettings() {
+  FleetDB.updateSettings({
+    defComm:        parseFloat(document.getElementById('defComm').value) || 15,
+    quickComm:      document.getElementById('quickComm').value.split(',').map(n => parseFloat(n.trim())).filter(Boolean),
+    alertThreshold: parseFloat(document.getElementById('alertThreshold').value) || 100000,
+  });
+  FleetDB.showToast('Commission settings saved');
+}
+
+function requirePhrase(phrase) {
+  const input = (prompt(`Type  ${phrase}  to confirm:`) || '').trim();
+  if (input !== phrase) { FleetDB.showToast('Action cancelled — phrase did not match', 'error'); return false; }
+  return true;
+}
+
+function clearTrips() {
+  if (!confirm('Delete ALL trip records? This resets all vendor balances.')) return;
+  if (!requirePhrase('DELETE TRIPS')) return;
+  FleetDB.clearTrips();
+  FleetDB.showToast('All trips cleared');
+  loadSettings();
+}
+
+function clearPayouts() {
+  if (!confirm('Delete ALL payout records?')) return;
+  if (!requirePhrase('DELETE PAYOUTS')) return;
+  FleetDB.clearPayouts();
+  FleetDB.showToast('All payouts cleared');
+  loadSettings();
+}
+
+function resetAll() {
+  if (!confirm('FULL RESET: delete all data and reload seed demo data?')) return;
+  if (!requirePhrase('RESET ALL')) return;
+  FleetDB.reset();
+}
+
+function doCleanSlate() {
+  if (!confirm('CLEAN SLATE: permanently deletes ALL vendors, vehicles, drivers, trips & customers.\n\nLogin and settings are kept. This cannot be undone.')) return;
+  if (!requirePhrase('CLEAN SLATE')) return;
+  FleetDB.cleanSlate();
+}
+
+async function changePassword() {
+  const pass = document.getElementById('authPass').value;
+  const conf = document.getElementById('authPassConfirm').value;
+  if (!pass) { FleetDB.showToast('Enter a new password', 'error'); return; }
+  if (pass.length < 6) { FleetDB.showToast('Password must be at least 6 characters', 'error'); return; }
+  if (pass !== conf) { FleetDB.showToast('Passwords do not match', 'error'); return; }
+  if (!window.fbAuth || !window.fbAuth.currentUser) { FleetDB.showToast('Not authenticated', 'error'); return; }
+  try {
+    await window.fbAuth.currentUser.updatePassword(pass);
+    document.getElementById('authPass').value = '';
+    document.getElementById('authPassConfirm').value = '';
+    FleetDB.showToast('Password updated successfully');
+  } catch (err) {
+    if (err.code === 'auth/requires-recent-login')
+      FleetDB.showToast('Please sign out and sign in again before changing your password', 'error');
+    else
+      FleetDB.showToast('Failed: ' + (err.message || err.code), 'error');
+  }
+}
+
+function exportBackup() {
+  const json = FleetDB.exportBackup();
+  const date = new Date().toISOString().slice(0, 10);
+  const a = document.createElement('a');
+  a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(json);
+  a.download = 'royal-motors-backup-' + date + '.json';
+  a.click();
+  FleetDB.showToast('Backup downloaded');
+}
+
+function importBackup(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      FleetDB.importBackup(e.target.result);
+      FleetDB.showToast('Backup restored — reloading…');
+      setTimeout(() => location.reload(), 1000);
+    } catch (err) {
+      FleetDB.showToast('Invalid backup file', 'error');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+/* ── Audit / Deleted Records ── */
+let currentAuditTab = 'deleted';
+
+function showAuditTab(tab) {
+  currentAuditTab = tab;
+  document.getElementById('deletedRecordsPanel').style.display = tab === 'deleted' ? '' : 'none';
+  document.getElementById('activityLogPanel').style.display    = tab === 'log'     ? '' : 'none';
+  document.getElementById('tabDeleted').style.background = tab === 'deleted' ? 'var(--accent-subtle)' : '';
+  document.getElementById('tabDeleted').style.color      = tab === 'deleted' ? 'var(--accent)' : '';
+  document.getElementById('tabLog').style.background     = tab === 'log' ? 'var(--accent-subtle)' : '';
+  document.getElementById('tabLog').style.color          = tab === 'log' ? 'var(--accent)' : '';
+  renderAudit();
+}
+
+function renderAudit() {
+  const filter = document.getElementById('auditEntityFilter').value;
+
+  if (currentAuditTab === 'deleted') {
+    let deleted = [
+      ...FleetDB.getDeletedVendors().map(r => ({ ...r, _entity:'vendor',  _label:`${r.name||'?'} · ${r.contact||''} · ${r.phone||''}` })),
+      ...FleetDB.getDeletedVehicles().map(r => ({ ...r, _entity:'vehicle', _label:`${r.plate||'?'} · ${r.model||''} · ${r.status||''}` })),
+      ...FleetDB.getDeletedDrivers().map(r => ({ ...r, _entity:'driver',   _label:`${r.name||'?'} · ${r.phone||''} · ${r.cnic||''}` })),
+    ];
+    if (filter) deleted = deleted.filter(r => r._entity === filter);
+    deleted.sort((a, b) => (b._deletedAt||'').localeCompare(a._deletedAt||''));
+
+    const typeBadge = { vendor:'badge-amber', vehicle:'badge-blue', driver:'badge-green' };
+    const E = FleetDB.escapeHtml;
+    document.getElementById('deletedList').innerHTML = deleted.length ? deleted.map(r => `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--r-md);">
+        <span class="badge ${typeBadge[r._entity]||'badge-muted'}" style="flex-shrink:0;">${r._entity}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;">${E(r._label)}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">
+            Deleted by <strong>${E(r._deletedBy||'admin')}</strong> · ${r._deletedAt ? new Date(r._deletedAt).toLocaleString('en-US',{dateStyle:'medium',timeStyle:'short'}) : '—'}
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="restoreRecord('${r._entity}','${r.id}')" style="flex-shrink:0;color:var(--emerald);">↩ Restore</button>
+      </div>`).join('')
+    : '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px;">No deleted records — all clean</div>';
+
+  } else {
+    let log = FleetDB.getAuditLog();
+    if (filter) log = log.filter(e => e.entity === filter);
+    document.getElementById('auditLogBody').innerHTML = log.length ? log.map(e =>
+      `<tr>
+        <td class="td-mono" style="font-size:11px;color:var(--text-muted);">${e.id}</td>
+        <td><span class="badge ${e.action==='delete'?'badge-red':'badge-green'}">${e.action==='delete'?'✕ Deleted':'↩ Restored'}</span></td>
+        <td><span class="badge badge-muted" style="font-size:10px;">${e.entity}</span></td>
+        <td style="font-size:13px;font-weight:500;">${E(e.entityName||'—')}</td>
+        <td style="font-size:12px;color:var(--text-secondary);">${E(e.performedBy||'admin')}</td>
+        <td class="td-mono" style="font-size:11px;">${e.performedAt ? new Date(e.performedAt).toLocaleString('en-US',{dateStyle:'medium',timeStyle:'short'}) : '—'}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted);">No activity logged yet</td></tr>';
+  }
+}
+
+function restoreRecord(entity, id) {
+  if (entity === 'vendor')  FleetDB.restoreVendor(id);
+  if (entity === 'vehicle') FleetDB.restoreVehicle(id);
+  if (entity === 'driver')  FleetDB.restoreDriver(id);
+  FleetDB.showToast('Record restored successfully');
+  renderAudit();
+  loadSettings();
+}
+
+loadSettings();
+renderAudit();
+</script>
+</body>
+</html>

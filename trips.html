@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Bookings — Royal Motors</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"/>
+  <link rel="stylesheet" href="styles.css"/>
+  <style>
+    .tab-bar { display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid var(--border);padding-bottom:0; }
+    .tab-btn {
+      padding:9px 20px;font-size:13px;font-weight:600;border:none;background:none;
+      cursor:pointer;color:var(--text-muted);border-bottom:2px solid transparent;
+      margin-bottom:-2px;transition:color .15s,border-color .15s;font-family:inherit;
+    }
+    .tab-btn.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .tab-btn:hover:not(.active) { color:var(--text-secondary); }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar" id="topbar"></header>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main-content">
+
+    <div class="page-header">
+      <div>
+        <div class="page-title">Records</div>
+        <div class="page-subtitle" id="pageSubtitle">All customer bookings</div>
+      </div>
+      <div class="page-actions" id="pageActions"></div>
+    </div>
+
+    <!-- Tab bar -->
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tabBk"  onclick="showTab('bookings')">📋 Bookings</button>
+      <button class="tab-btn"        id="tabDt"  onclick="showTab('duties')">₨ Financial Duties</button>
+    </div>
+
+    <!-- ══════════ BOOKINGS TAB ══════════ -->
+    <div id="panelBookings">
+
+      <!-- Filters -->
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+        <div class="topbar-search" style="width:240px;">
+          <span class="search-icon">⌕</span>
+          <input type="text" placeholder="Customer, vehicle, route…" id="bkSearch" aria-label="Search bookings"/>
+        </div>
+        <select class="form-select" style="width:140px;height:34px;" id="bkStatus" onchange="bkPage=0;renderBookings()">
+          <option value="">All Status</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="hold">Hold</option>
+          <option value="pending">Pending</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <select class="form-select" style="width:130px;height:34px;" id="bkType" onchange="bkPage=0;renderBookings()">
+          <option value="">All Types</option>
+          <option value="pick_drop">Pick &amp; Drop</option>
+          <option value="tour">Tour</option>
+        </select>
+        <input type="month" class="form-input" style="height:34px;width:150px;" id="bkMonth" onchange="bkPage=0;renderBookings()"/>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('bkMonth').value='';renderBookings()">Clear Month</button>
+        <div style="margin-left:auto;font-size:13px;color:var(--text-secondary);">
+          <span id="bkCount" style="font-weight:600;color:var(--text-primary);">—</span> bookings
+        </div>
+      </div>
+
+      <!-- Stats row -->
+      <div class="grid-4 mb-5" id="bkStats"></div>
+
+      <!-- Table -->
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Booking ID</th><th>Date</th><th>Customer</th><th>Type</th>
+            <th>Route / Dates</th><th>Vehicles</th><th>Status</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="bkBody"></tbody>
+        </table>
+      </div>
+      <div id="bkPager"></div>
+    </div>
+
+    <!-- ══════════ FINANCIAL DUTIES TAB ══════════ -->
+    <div id="panelDuties" style="display:none;">
+
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+        <div class="topbar-search" style="width:240px;">
+          <span class="search-icon">⌕</span>
+          <input type="text" placeholder="Search plate, vendor, driver…" id="tripSearch" aria-label="Search duties"/>
+        </div>
+        <select class="form-select" style="width:140px;height:34px;" id="statusF" onchange="tripPage=0;filterTrips()">
+          <option value="">All Status</option>
+          <option value="completed">Completed</option>
+          <option value="pending">Pending</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <select class="form-select" style="width:160px;height:34px;" id="vendorF" onchange="tripPage=0;filterTrips()">
+          <option value="">All Vendors</option>
+        </select>
+        <input type="date" class="form-input" style="height:34px;width:145px;" id="dateF" onchange="tripPage=0;filterTrips()"/>
+        <button class="btn btn-secondary btn-sm" onclick="exportCSV()">⬇ CSV</button>
+        <div style="margin-left:auto;font-size:13px;color:var(--text-secondary);">
+          <span id="rowCount" style="font-weight:600;color:var(--text-primary);">—</span> duties
+        </div>
+      </div>
+
+      <div class="grid-4 mb-5" id="tripStats"></div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Duty ID</th><th>Date</th><th>Vehicle</th><th>Vendor</th><th>Driver</th><th>Customer</th>
+            <th>Revenue</th><th>Commission</th><th>Net</th><th>Status</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="tripsBody"></tbody>
+        </table>
+      </div>
+      <div id="tripPager"></div>
+    </div>
+
+  </main>
+</div>
+<nav class="mobile-nav" id="mobileNav"></nav>
+
+<!-- Complete & Bill Modal -->
+<div class="modal-overlay" id="billModal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Complete &amp; Bill</div>
+        <div style="font-size:12px;color:var(--text-muted);" id="billBkInfo"></div>
+      </div>
+      <button class="icon-btn" onclick="FleetDB.closeModal('billModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="billBkId"/>
+
+      <!-- Booking summary strip -->
+      <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--text-secondary);" id="billSummary"></div>
+
+      <!-- Per-vehicle billing rows -->
+      <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">
+        Enter amount per vehicle
+      </div>
+      <div id="billRows"></div>
+
+      <div class="form-group" style="margin-top:12px;">
+        <label class="form-label">Date of completion</label>
+        <input type="date" class="form-input" id="billDate" style="max-width:200px;"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes (optional)</label>
+        <input type="text" class="form-input" id="billNotes" placeholder="Any remarks…"/>
+      </div>
+
+      <div style="margin-top:12px;padding:10px 14px;background:var(--accent)10;border:1px solid var(--accent)30;border-radius:var(--r-sm);font-size:12px;color:var(--text-secondary);">
+        This will create a <strong>Financial Duty</strong> record for each vehicle and mark the booking as <strong>Completed</strong>.
+        The duties will appear in the vendor ledger for payment settlement.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="FleetDB.closeModal('billModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitBill()">✓ Create Financial Records</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Booking Status Modal -->
+<div class="modal-overlay" id="editBkModal">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Edit Booking</div>
+        <div style="font-size:12px;color:var(--text-muted);" id="ebId"></div>
+      </div>
+      <button class="icon-btn" onclick="FleetDB.closeModal('editBkModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ebBkId"/>
+      <div class="form-group">
+        <label class="form-label">Status</label>
+        <select class="form-select" id="ebStatus">
+          <option value="confirmed">Confirmed</option>
+          <option value="hold">Hold</option>
+          <option value="pending">Pending</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <textarea class="form-textarea" id="ebNotes" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="FleetDB.closeModal('editBkModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEditBk()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Trip Receipt Modal -->
+<div class="modal-overlay" id="receiptModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header" style="border-bottom:none;padding-bottom:0;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="logo-icon" style="width:34px;height:34px;font-size:15px;">F</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text-primary);">Royal Motors Transport</div>
+          <div style="font-size:10px;color:var(--text-muted);letter-spacing:.5px;text-transform:uppercase;">Duty Receipt</div>
+        </div>
+      </div>
+      <button class="icon-btn" onclick="FleetDB.closeModal('receiptModal')">✕</button>
+    </div>
+    <div class="modal-body" style="padding-top:8px;">
+      <div id="rcptBanner" style="background:linear-gradient(135deg,var(--bg-overlay),var(--bg-elevated));border:1px solid var(--border-mid);border-radius:var(--r-lg);padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px;">Duty ID</div>
+          <div id="rcptId" style="font-size:20px;font-weight:700;font-family:var(--mono);color:var(--accent);"></div>
+          <div id="rcptDate" style="font-size:12px;color:var(--text-secondary);margin-top:3px;"></div>
+        </div>
+        <span id="rcptStatus" class="badge" style="font-size:12px;padding:6px 14px;"></span>
+      </div>
+      <div id="rcptVehicle" style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:14px;">
+        <div style="width:42px;height:42px;background:var(--accent-subtle);border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">🚗</div>
+        <div>
+          <div id="rcptPlate" style="font-size:16px;font-weight:700;font-family:var(--mono);color:var(--text-primary);"></div>
+          <div id="rcptModel" style="font-size:12px;color:var(--text-secondary);margin-top:2px;"></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">
+        <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;">
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;">Driver</div>
+          <div id="rcptDriver" style="font-size:13px;font-weight:600;color:var(--text-primary);"></div>
+        </div>
+        <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;">
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;">Vendor</div>
+          <div id="rcptVendor" style="font-size:13px;font-weight:600;color:var(--text-primary);"></div>
+        </div>
+      </div>
+      <div style="border:1px solid var(--border-mid);border-radius:var(--r-lg);overflow:hidden;margin-bottom:16px;">
+        <div style="background:var(--bg-elevated);padding:10px 16px;border-bottom:1px solid var(--border);">
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600;">Financial Breakdown</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 16px;border-bottom:1px solid var(--border);">
+          <span style="font-size:13px;color:var(--text-secondary);">Gross Revenue</span>
+          <span id="rcptGross" style="font-size:13px;font-weight:600;font-family:var(--mono);color:var(--text-primary);"></span>
+        </div>
+        <div id="rcptCommRow" style="display:flex;justify-content:space-between;align-items:center;padding:11px 16px;border-bottom:1px solid var(--border);">
+          <span style="font-size:13px;color:var(--text-secondary);">Commission <span id="rcptCommPct" style="font-size:11px;color:var(--text-muted);"></span></span>
+          <span id="rcptComm" style="font-size:13px;font-weight:600;font-family:var(--mono);color:var(--red);"></span>
+        </div>
+        <div id="rcptExpRow" style="display:flex;justify-content:space-between;align-items:center;padding:11px 16px;border-bottom:1px solid var(--border);">
+          <span style="font-size:13px;color:var(--text-secondary);">Expenses</span>
+          <span id="rcptExp" style="font-size:13px;font-weight:600;font-family:var(--mono);color:var(--red);"></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:var(--accent-subtle);">
+          <span style="font-size:14px;font-weight:700;color:var(--accent);">Vendor Net</span>
+          <span id="rcptNet" style="font-size:18px;font-weight:700;font-family:var(--mono);color:var(--accent);"></span>
+        </div>
+      </div>
+      <div id="rcptNotesWrap" style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;display:none;">
+        <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;">Notes</div>
+        <div id="rcptNotes" style="font-size:13px;color:var(--text-secondary);"></div>
+      </div>
+    </div>
+    <div class="modal-footer" style="justify-content:space-between;">
+      <button class="btn btn-secondary" onclick="FleetDB.closeModal('receiptModal')">Close</button>
+      <button class="btn btn-primary" id="rcptPrintBtn">🖨 Download PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Trip Modal -->
+<div class="modal-overlay" id="editTripModal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Edit Duty</div>
+        <div style="font-size:12px;color:var(--text-muted);" id="etId"></div>
+      </div>
+      <button class="icon-btn" onclick="FleetDB.closeModal('editTripModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="etTripId"/>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Date</label>
+          <input type="date" class="form-input" id="etDate"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-select" id="etStatus">
+            <option value="completed">Completed</option>
+            <option value="pending">Pending</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Vehicle</label>
+          <select class="form-select" id="etVehicle"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Driver</label>
+          <select class="form-select" id="etDriver"></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Gross Revenue (PKR) <span class="required">*</span></label>
+          <div class="input-group"><span class="input-prefix">₨</span><input type="number" class="form-input" id="etGross" min="0" oninput="recalcEdit()"/></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Commission (PKR)</label>
+          <div class="input-group"><span class="input-prefix">₨</span><input type="number" class="form-input" id="etCommission" min="0" oninput="recalcEdit()"/></div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Expenses (PKR)</label>
+          <div class="input-group"><span class="input-prefix">₨</span><input type="number" class="form-input" id="etExpenses" min="0" oninput="recalcEdit()"/></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Vendor Net (auto)</label>
+          <div class="input-group"><span class="input-prefix">₨</span><input type="number" class="form-input" id="etNet" readonly style="opacity:.6;"/></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <input type="text" class="form-input" id="etNotes" placeholder="Optional…"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="FleetDB.closeModal('editTripModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEditTrip()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase (cloud sync + auth) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-sync.js"></script>
+<script src="data.js"></script>
+<script>
+FleetDB.init('trips.html');
+const PAGE_SIZE = 50;
+let bkPage = 0, tripPage = 0;
+function gotoBkPage(p)   { bkPage   = p; renderBookings(); }
+function gotoTripPage(p) { tripPage = p; renderTripTable(); }
+
+/* ════════════════════════
+   TAB SWITCHING
+════════════════════════ */
+function showTab(tab) {
+  const isBk = tab === 'bookings';
+  document.getElementById('panelBookings').style.display = isBk ? '' : 'none';
+  document.getElementById('panelDuties').style.display   = isBk ? 'none' : '';
+  document.getElementById('tabBk').classList.toggle('active', isBk);
+  document.getElementById('tabDt').classList.toggle('active', !isBk);
+
+  if (isBk) {
+    document.getElementById('pageSubtitle').textContent = 'All customer bookings';
+    document.getElementById('pageActions').innerHTML =
+      `<a href="dispatch.html" class="btn btn-primary">+ New Booking</a>`;
+    renderBookings();
+  } else {
+    document.getElementById('pageSubtitle').textContent = 'Financial duty records for vendor settlement';
+    document.getElementById('pageActions').innerHTML =
+      `<button class="btn btn-secondary" onclick="exportCSV()">⬇ CSV</button>`;
+    filterTrips();
+  }
+}
+
+/* ════════════════════════
+   BOOKINGS TAB
+════════════════════════ */
+const BK_STATUS_BADGE = {
+  confirmed: 'badge-green',
+  hold:      'badge-amber',
+  pending:   'badge-amber',
+  completed: 'badge-teal',
+  cancelled: 'badge-red',
+};
+const SVC_ICON  = { pick_drop:'🚗', tour:'🗺' };
+const SVC_LABEL = { pick_drop:'Pick & Drop', tour:'Tour' };
+
+function renderBookings() {
+  const q       = (document.getElementById('bkSearch').value  || '').toLowerCase();
+  const sf      = document.getElementById('bkStatus').value;
+  const tf      = document.getElementById('bkType').value;
+  const mf      = document.getElementById('bkMonth').value;   // 'YYYY-MM'
+  const vehicles = FleetDB.getVehicles();
+
+  let bks = FleetDB.getBookings();
+
+  // Sort newest first
+  bks.sort((a, b) => (b.requestedDate || b.createdAt || '').localeCompare(a.requestedDate || a.createdAt || ''));
+
+  if (sf) bks = bks.filter(b => b.status === sf);
+  if (tf) bks = bks.filter(b => b.serviceType === tf);
+  if (mf) bks = bks.filter(b => (b.requestedDate || '').startsWith(mf));
+  if (q)  bks = bks.filter(b =>
+    (b.customerName  || '').toLowerCase().includes(q) ||
+    (b.customerPhone || '').toLowerCase().includes(q) ||
+    (b.fromLocation  || '').toLowerCase().includes(q) ||
+    (b.toLocation    || '').toLowerCase().includes(q) ||
+    (b.id            || '').toLowerCase().includes(q) ||
+    (b.vehicleIds || []).some(vid => {
+      const v = vehicles.find(x => x.id === vid);
+      return v && (v.plate || '').toLowerCase().includes(q);
+    })
+  );
+
+  document.getElementById('bkCount').textContent = bks.length;
+  const bkTotal = bks.length;
+
+  // Stats
+  const confirmed = bks.filter(b => b.status === 'confirmed').length;
+  const hold      = bks.filter(b => b.status === 'hold').length;
+  const completed = bks.filter(b => b.status === 'completed').length;
+  const cancelled = bks.filter(b => b.status === 'cancelled').length;
+  document.getElementById('bkStats').innerHTML = [
+    ['Total',      bks.length,  ''],
+    ['Confirmed',  confirmed,   'color:var(--emerald)'],
+    ['On Hold',    hold,        'color:var(--amber)'],
+    ['Completed',  completed,   'color:var(--accent)'],
+  ].map(([l,v,s]) => `<div class="card" style="padding:14px;">
+    <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">${l}</div>
+    <div style="font-size:22px;font-weight:700;${s}">${v}</div>
+  </div>`).join('');
+
+  if (!bks.length) {
+    document.getElementById('bkBody').innerHTML =
+      '<tr><td colspan="8" style="text-align:center;padding:36px;color:var(--text-muted);">No bookings found</td></tr>';
+    document.getElementById('bkPager').innerHTML = '';
+    return;
+  }
+
+  const bkDisplay = bks.slice(bkPage * PAGE_SIZE, (bkPage + 1) * PAGE_SIZE);
+  document.getElementById('bkBody').innerHTML = bkDisplay.map(b => {
+    // Build unique vehicle list with quantities
+    const qtys = {};
+    (b.vehicleIds || []).forEach(id => { qtys[id] = (qtys[id] || 0) + 1; });
+    const vehStr = Object.entries(qtys).map(([id, qty]) => {
+      const v = vehicles.find(x => x.id === id);
+      const name = v ? (v.plate) : id;
+      return qty > 1 ? `${name} ×${qty}` : name;
+    }).join(', ') || '—';
+
+    const E = FleetDB.escapeHtml;
+    const detail = b.serviceType === 'pick_drop'
+      ? `${E(b.fromLocation || '—')} → ${E(b.toLocation || '—')}`
+      : `${E(b.tourFromDate || '—')} → ${E(b.tourToDate || '—')}`;
+
+    return `<tr>
+      <td class="td-mono" style="font-size:11px;color:var(--text-muted);">${b.id}</td>
+      <td class="td-mono" style="font-size:12px;">${b.requestedDate || '—'}</td>
+      <td>
+        <div style="font-size:13px;font-weight:600;">${E(b.customerName || '—')}</div>
+        <div style="font-size:11px;color:var(--text-muted);font-family:var(--mono);">${E(b.customerPhone || '')}</div>
+      </td>
+      <td style="font-size:12px;">${SVC_ICON[b.serviceType] || ''} ${SVC_LABEL[b.serviceType] || b.serviceType}</td>
+      <td style="font-size:12px;color:var(--text-secondary);">${detail}</td>
+      <td style="font-size:11px;font-family:var(--mono);color:var(--text-secondary);">${vehStr}</td>
+      <td><span class="badge ${BK_STATUS_BADGE[b.status] || 'badge-muted'}">${E(b.status)}</span></td>
+      <td>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;">
+          ${(b.status === 'confirmed' || b.status === 'pending')
+            ? `<button class="btn btn-sm" style="background:var(--emerald)18;color:var(--emerald);border:1px solid var(--emerald)44;white-space:nowrap;"
+                       onclick="openBillModal('${b.id}')">✓ Complete &amp; Bill</button>`
+            : b.status === 'completed'
+            ? `<span style="font-size:11px;color:var(--accent);">✓ Billed</span>`
+            : ''}
+          <button class="btn btn-secondary btn-sm" onclick="editBooking('${b.id}')">Edit</button>
+          <button class="btn btn-danger btn-sm"    onclick="deleteBooking('${b.id}')">Del</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+  document.getElementById('bkPager').innerHTML = FleetDB.pagerHTML(bkTotal, bkPage, PAGE_SIZE, 'gotoBkPage');
+}
+
+function editBooking(id) {
+  const b = FleetDB.getBooking(id);
+  if (!b) return;
+  document.getElementById('ebBkId').value       = b.id;
+  document.getElementById('ebId').textContent   = b.id + ' — ' + (b.customerName || '');
+  document.getElementById('ebStatus').value     = b.status || 'confirmed';
+  document.getElementById('ebNotes').value      = b.notes  || '';
+  FleetDB.openModal('editBkModal');
+}
+
+function saveEditBk() {
+  const id = document.getElementById('ebBkId').value;
+  FleetDB.updateBooking(id, {
+    status: document.getElementById('ebStatus').value,
+    notes:  document.getElementById('ebNotes').value.trim(),
+  });
+  FleetDB.closeModal('editBkModal');
+  FleetDB.showToast('Booking updated');
+  renderBookings();
+}
+
+function deleteBooking(id) {
+  if (!confirm('Delete booking ' + id + '?')) return;
+  FleetDB.deleteBooking(id);
+  FleetDB.showToast('Booking deleted');
+  renderBookings();
+}
+
+/* ════════════════════════
+   FINANCIAL DUTIES TAB
+════════════════════════ */
+// Populate vendor filter
+FleetDB.getVendors().forEach(v => {
+  const o = document.createElement('option');
+  o.value = v.id; o.textContent = v.name;
+  document.getElementById('vendorF').appendChild(o);
+});
+
+// Populate edit modal selects
+(function() {
+  const vSel = document.getElementById('etVehicle');
+  const dSel = document.getElementById('etDriver');
+  const E = FleetDB.escapeHtml;
+  vSel.innerHTML = '<option value="">— None —</option>' +
+    FleetDB.getVehicles().map(v => `<option value="${v.id}">${E(v.plate)} (${E(v.model||'')})</option>`).join('');
+  dSel.innerHTML = '<option value="">— None —</option>' +
+    FleetDB.getDrivers().map(d => `<option value="${d.id}">${E(d.name)}</option>`).join('');
+})();
+
+let filtered = [];
+
+function filterTrips() {
+  const q  = (document.getElementById('tripSearch').value || '').toLowerCase();
+  const sf = document.getElementById('statusF').value;
+  const vf = document.getElementById('vendorF').value;
+  const df = document.getElementById('dateF').value;
+  const vehicles = FleetDB.getVehicles();
+  const drivers  = FleetDB.getDrivers();
+
+  filtered = FleetDB.getTrips().filter(t => {
+    const v = vehicles.find(x => x.id === t.vehicleId);
+    const d = drivers.find(x => x.id === t.driverId);
+    const matchQ = !q || t.id.toLowerCase().includes(q) ||
+      (v && v.plate.toLowerCase().includes(q)) ||
+      (d && d.name.toLowerCase().includes(q));
+    return matchQ && (!sf || t.status === sf) && (!vf || t.vendorId === vf) && (!df || t.date === df);
+  });
+
+  renderTripStats();
+  renderTripTable();
+}
+
+function renderTripStats() {
+  const totRev  = filtered.reduce((s,t) => s + (t.gross||0), 0);
+  const totComm = filtered.reduce((s,t) => s + (t.commission||0), 0);
+  const totVend = filtered.reduce((s,t) => s + (t.net||0), 0);
+  document.getElementById('rowCount').textContent = filtered.length;
+  document.getElementById('tripStats').innerHTML = [
+    ['Total Duties',  filtered.length,              ''],
+    ['Total Revenue', FleetDB.fmtMoney(totRev),     ''],
+    ['Commission',    FleetDB.fmtMoney(totComm),    'color:var(--amber)'],
+    ['Vendor Net',    FleetDB.fmtMoney(totVend),    'color:var(--emerald)'],
+  ].map(([l,v,s]) => `<div class="card" style="padding:14px;">
+    <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">${l}</div>
+    <div style="font-size:20px;font-weight:700;${s}">${v}</div>
+  </div>`).join('');
+}
+
+function renderTripTable() {
+  const vehicles  = FleetDB.getVehicles();
+  const drivers   = FleetDB.getDrivers();
+  const vendors   = FleetDB.getVendors();
+  const customers = FleetDB.getCustomers();
+  const sb = { completed:'badge-green', pending:'badge-amber', cancelled:'badge-red' };
+  const tripDisplay = filtered.slice(tripPage * PAGE_SIZE, (tripPage + 1) * PAGE_SIZE);
+  document.getElementById('tripsBody').innerHTML = filtered.length
+    ? tripDisplay.map(t => {
+        const v  = vehicles.find(x => x.id === t.vehicleId);
+        const d  = drivers.find(x => x.id === t.driverId);
+        const vn = vendors.find(x => x.id === t.vendorId);
+        const cu = customers.find(x => x.id === t.customerId);
+        const E = FleetDB.escapeHtml;
+        return `<tr>
+          <td class="td-mono">${t.id}</td>
+          <td class="td-mono">${t.date}</td>
+          <td style="font-weight:600;font-family:var(--mono);font-size:12px;">${E(v ? v.plate : '?')}</td>
+          <td style="font-size:13px;">${E(vn ? vn.name : '?')}</td>
+          <td style="font-size:13px;color:var(--text-secondary);">${E(d ? d.name : '—')}</td>
+          <td style="font-size:12px;color:var(--text-secondary);">${cu ? E(cu.name) : '<span style="color:var(--text-muted);">Walk-in</span>'}</td>
+          <td class="td-amount">PKR ${(t.gross||0).toLocaleString()}</td>
+          <td class="td-amount negative">PKR ${(t.commission||0).toLocaleString()}</td>
+          <td class="td-amount positive">PKR ${(t.net||0).toLocaleString()}</td>
+          <td><span class="badge ${sb[t.status]||'badge-muted'}">${E(t.status)}</span></td>
+          <td>
+            <div style="display:flex;gap:5px;">
+              <button class="btn btn-sm" style="background:var(--accent-subtle);color:var(--accent);border:1px solid var(--accent-border);" onclick="openReceipt('${t.id}')">Receipt</button>
+              <button class="btn btn-secondary btn-sm" onclick="editTrip('${t.id}')">Edit</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteTrip('${t.id}')">Del</button>
+            </div>
+          </td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="11" style="text-align:center;padding:32px;color:var(--text-muted);">No duties found</td></tr>';
+  document.getElementById('tripPager').innerHTML = FleetDB.pagerHTML(filtered.length, tripPage, PAGE_SIZE, 'gotoTripPage');
+}
+
+function deleteTrip(id) {
+  if (!confirm('Delete duty ' + id + '?')) return;
+  FleetDB.deleteTrip(id);
+  FleetDB.showToast('Deleted ' + id);
+  filterTrips();
+}
+
+function exportCSV() {
+  const rows = [['Duty ID','Date','Vehicle','Vendor','Driver','Customer','Revenue','Commission','Net','Status']];
+  const vehicles = FleetDB.getVehicles(), drivers = FleetDB.getDrivers(),
+        vendors  = FleetDB.getVendors(),  customers = FleetDB.getCustomers();
+  filtered.forEach(t => {
+    const v=vehicles.find(x=>x.id===t.vehicleId), d=drivers.find(x=>x.id===t.driverId),
+          vn=vendors.find(x=>x.id===t.vendorId),  cu=customers.find(x=>x.id===t.customerId);
+    rows.push([t.id,t.date,v?v.plate:'',vn?vn.name:'',d?d.name:'',cu?cu.name:'Walk-in',t.gross,t.commission,t.net,t.status]);
+  });
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv,' + encodeURIComponent(csv);
+  a.download = 'duties.csv'; a.click();
+}
+
+function recalcEdit() {
+  const g = parseFloat(document.getElementById('etGross').value)      || 0;
+  const c = parseFloat(document.getElementById('etCommission').value) || 0;
+  const e = parseFloat(document.getElementById('etExpenses').value)   || 0;
+  document.getElementById('etNet').value = Math.max(0, g - c - e);
+}
+
+function editTrip(id) {
+  const t = FleetDB.getTrips().find(x => x.id === id);
+  if (!t) return;
+  document.getElementById('etTripId').value     = t.id;
+  document.getElementById('etId').textContent   = t.id;
+  document.getElementById('etDate').value       = t.date;
+  document.getElementById('etStatus').value     = t.status;
+  document.getElementById('etVehicle').value    = t.vehicleId  || '';
+  document.getElementById('etDriver').value     = t.driverId   || '';
+  document.getElementById('etGross').value      = t.gross      || '';
+  document.getElementById('etCommission').value = t.commission || '';
+  document.getElementById('etExpenses').value   = t.expenses   || '';
+  document.getElementById('etNet').value        = t.net        || '';
+  document.getElementById('etNotes').value      = t.notes      || '';
+  FleetDB.openModal('editTripModal');
+}
+
+function saveEditTrip() {
+  const id    = document.getElementById('etTripId').value;
+  const gross = parseFloat(document.getElementById('etGross').value) || 0;
+  const comm  = parseFloat(document.getElementById('etCommission').value) || 0;
+  const exp   = parseFloat(document.getElementById('etExpenses').value)   || 0;
+  if (!gross || gross <= 0) { FleetDB.showToast('Enter a valid gross revenue', 'error'); return; }
+  if (comm < 0 || exp < 0) { FleetDB.showToast('Amounts cannot be negative', 'error'); return; }
+  if (comm > gross && !confirm(`Commission ${FleetDB.fmtMoney(comm)} exceeds gross ${FleetDB.fmtMoney(gross)}. Continue?`)) return;
+  const dateVal = document.getElementById('etDate').value;
+  if (dateVal > FleetDB.today() && !confirm(`Date ${dateVal} is in the future. Record anyway?`)) return;
+  FleetDB.updateTrip(id, {
+    date:       dateVal,
+    status:     document.getElementById('etStatus').value,
+    vehicleId:  document.getElementById('etVehicle').value,
+    driverId:   document.getElementById('etDriver').value,
+    gross, commission: comm, expenses: exp,
+    notes:      document.getElementById('etNotes').value.trim(),
+  });
+  FleetDB.closeModal('editTripModal');
+  FleetDB.showToast('Duty updated');
+  filterTrips();
+}
+
+function openReceipt(id) {
+  const t  = FleetDB.getTrips().find(x => x.id === id);
+  if (!t) return;
+  const vh = FleetDB.getVehicles().find(x => x.id === t.vehicleId);
+  const dr = FleetDB.getDrivers().find(x => x.id === t.driverId);
+  const vn = FleetDB.getVendors().find(x => x.id === t.vendorId);
+  const sb = { completed:'badge-green', pending:'badge-amber', cancelled:'badge-red' };
+  const dateF = t.date ? new Date(t.date + 'T00:00:00').toLocaleDateString('en-US',{day:'numeric',month:'long',year:'numeric'}) : '—';
+  document.getElementById('rcptId').textContent      = t.id;
+  document.getElementById('rcptDate').textContent    = dateF;
+  document.getElementById('rcptStatus').className    = 'badge ' + (sb[t.status] || 'badge-muted');
+  document.getElementById('rcptStatus').textContent  = t.status;
+  document.getElementById('rcptPlate').textContent   = vh ? vh.plate : '—';
+  document.getElementById('rcptModel').textContent   = vh ? (vh.model || '') : '';
+  document.getElementById('rcptDriver').textContent  = dr ? dr.name : '—';
+  document.getElementById('rcptVendor').textContent  = vn ? vn.name : '—';
+  document.getElementById('rcptGross').textContent   = 'PKR ' + (t.gross||0).toLocaleString();
+  document.getElementById('rcptComm').textContent    = '− PKR ' + (t.commission||0).toLocaleString();
+  document.getElementById('rcptCommPct').textContent = t.commPct ? '('+t.commPct+'%)' : '';
+  document.getElementById('rcptNet').textContent     = 'PKR ' + (t.net||0).toLocaleString();
+  document.getElementById('rcptExpRow').style.display = t.expenses > 0 ? '' : 'none';
+  if (t.expenses > 0) document.getElementById('rcptExp').textContent = '− PKR ' + t.expenses.toLocaleString();
+  document.getElementById('rcptNotesWrap').style.display = t.notes ? '' : 'none';
+  if (t.notes) document.getElementById('rcptNotes').textContent = t.notes;
+  document.getElementById('rcptPrintBtn').onclick = () => printReceipt(id);
+  FleetDB.openModal('receiptModal');
+}
+
+function printReceipt(id) {
+  const html = FleetDB.buildTripReceiptHTML(id);
+  if (!html) return;
+  FleetDB.openPrintWindow(html);
+}
+
+/* ════════════════════════
+   COMPLETE & BILL
+════════════════════════ */
+function openBillModal(bkId) {
+  const b        = FleetDB.getBooking(bkId);
+  if (!b) return;
+  const vehicles = FleetDB.getVehicles();
+  const drivers  = FleetDB.getDrivers();
+
+  document.getElementById('billBkId').value       = bkId;
+  document.getElementById('billBkInfo').textContent = bkId + ' — ' + (b.customerName || '');
+  document.getElementById('billDate').value        = FleetDB.today();
+  document.getElementById('billNotes').value       = '';
+
+  // Summary strip
+  const detail = b.serviceType === 'pick_drop'
+    ? `🚗 ${b.fromLocation || '?'} → ${b.toLocation || '?'}`
+    : `🗺 Tour: ${b.tourFromDate || '?'} → ${b.tourToDate || '?'}`;
+  const E = FleetDB.escapeHtml;
+  document.getElementById('billSummary').innerHTML =
+    `<strong>${E(b.customerName)}</strong> &nbsp;·&nbsp; ${E(detail)} &nbsp;·&nbsp; ${b.requestedDate}`;
+
+  // Build unique vehicle list (count duplicates)
+  const qtys = {};
+  (b.vehicleIds || []).forEach(id => { qtys[id] = (qtys[id] || 0) + 1; });
+
+  // Build per-vehicle input rows
+  const rows = Object.entries(qtys).map(([vid, qty]) => {
+    const v      = vehicles.find(x => x.id === vid);
+    const driver = v && v.driverId ? drivers.find(x => x.id === v.driverId) : null;
+    const label  = v ? E(v.plate) + (v.model ? ' · ' + E(v.model) : '') : vid;
+    const dLabel = E(driver ? driver.name : '—');
+    const prefill = b.gross ? Math.round(parseFloat(b.gross) / Object.keys(qtys).length) : '';
+    const commPre = b.commission ? Math.round(parseFloat(b.commission) / Object.keys(qtys).length) : '';
+    return `<div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--r-sm);
+                        padding:10px 12px;margin-bottom:8px;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">
+        ${qty > 1 ? qty + '× ' : ''}${label}
+        <span style="font-size:11px;color:var(--text-muted);font-weight:400;margin-left:8px;">Driver: ${dLabel}</span>
+      </div>
+      <div class="form-row" style="margin:0;">
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">Gross Revenue (PKR) <span class="required">*</span></label>
+          <div class="input-group">
+            <span class="input-prefix">₨</span>
+            <input type="number" class="form-input bill-gross" data-vid="${vid}" data-qty="${qty}"
+                   placeholder="0" min="0" value="${prefill}"/>
+          </div>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">Commission <span style="color:var(--text-muted);font-size:10px;">(optional)</span></label>
+          <div class="input-group">
+            <span class="input-prefix">₨</span>
+            <input type="number" class="form-input bill-comm" data-vid="${vid}"
+                   placeholder="0" min="0" value="${commPre}"/>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('billRows').innerHTML = rows ||
+    '<div style="color:var(--text-muted);font-size:13px;">No vehicles on this booking</div>';
+
+  FleetDB.openModal('billModal');
+}
+
+function submitBill() {
+  const bkId    = document.getElementById('billBkId').value;
+  const b       = FleetDB.getBooking(bkId);
+  if (!b) return;
+
+  const date    = document.getElementById('billDate').value  || FleetDB.today();
+  if (date > FleetDB.today() && !confirm(`Completion date ${date} is in the future. Continue?`)) return;
+  const notes   = document.getElementById('billNotes').value.trim();
+  const vehicles = FleetDB.getVehicles();
+  const drivers  = FleetDB.getDrivers();
+
+  const grossInputs = document.querySelectorAll('.bill-gross');
+  let anyFilled = false;
+  const tripIds = [];
+
+  grossInputs.forEach(inp => {
+    const gross = parseFloat(inp.value) || 0;
+    if (!gross || gross < 0) return;
+    anyFilled = true;
+
+    const vid  = inp.dataset.vid;
+    const qty  = parseInt(inp.dataset.qty) || 1;
+    const v    = vehicles.find(x => x.id === vid);
+    const commInput = document.querySelector(`.bill-comm[data-vid="${vid}"]`);
+    const comm = parseFloat(commInput?.value) || 0;
+
+    // Create one trip per quantity
+    for (let i = 0; i < qty; i++) {
+      const trip = FleetDB.addTrip({
+        date,
+        vehicleId:  vid,
+        vendorId:   v ? v.vendorId : '',
+        driverId:   v ? v.driverId : '',
+        customerId: b.customerId || '',
+        gross:      Math.round(gross / qty),
+        commission: Math.round(comm  / qty),
+        expenses:   0,
+        status:     'completed',
+        notes:      notes || (b.serviceType === 'pick_drop'
+                      ? `${b.fromLocation || ''} → ${b.toLocation || ''}`
+                      : `Tour ${b.tourFromDate || ''} → ${b.tourToDate || ''}`),
+        bookingId:  bkId,
+      });
+      tripIds.push(trip.id);
+    }
+  });
+
+  if (!anyFilled) {
+    FleetDB.showToast('Enter at least one gross amount', 'error');
+    return;
+  }
+
+  // Mark booking completed and link trip IDs
+  FleetDB.updateBooking(bkId, { status: 'completed', tripIds });
+
+  FleetDB.closeModal('billModal');
+  FleetDB.showToast('✓ ' + tripIds.length + ' duty record' + (tripIds.length !== 1 ? 's' : '') + ' created — ' + tripIds.join(', '));
+  renderBookings();
+}
+
+/* ════ START ════ */
+document.getElementById('bkSearch').oninput   = FleetDB.debounce(() => { bkPage   = 0; renderBookings(); }, 280);
+document.getElementById('tripSearch').oninput = FleetDB.debounce(() => { tripPage = 0; filterTrips();    }, 280);
+showTab('bookings');
+</script>
+</body>
+</html>

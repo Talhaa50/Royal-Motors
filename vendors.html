@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Vendors — Royal Motors</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar" id="topbar"></header>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main-content">
+    <div class="page-header">
+      <div><div class="page-title">Vendors</div><div class="page-subtitle">Vehicle owners &amp; balances</div></div>
+      <div class="page-actions">
+        <input type="text" class="form-input" style="width:200px;height:34px;" placeholder="Search vendors…" id="vSearch" oninput="renderVendors()"/>
+        <button class="btn btn-secondary" onclick="exportVendors()">⬇ Export CSV</button>
+        <button class="btn btn-primary" onclick="FleetDB.openModal('addVendorModal')">+ Add Vendor</button>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="grid-4 mb-5" id="vendorSummary"></div>
+
+    <!-- Cards -->
+    <div class="entity-grid" id="vendorGrid"></div>
+  </main>
+</div>
+<nav class="mobile-nav" id="mobileNav"></nav>
+
+<!-- Vendor Profile Modal -->
+<div class="modal-overlay" id="vendorProfileModal">
+  <div class="modal" style="max-width:660px;">
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div id="pAv" class="entity-avatar" style="width:40px;height:40px;font-size:18px;border-radius:50%;"></div>
+        <div><div class="modal-title" id="pName">—</div><div style="font-size:12px;color:var(--text-muted);" id="pMeta">—</div></div>
+      </div>
+      <button class="icon-btn" onclick="FleetDB.closeModal('vendorProfileModal')">✕</button>
+    </div>
+    <div class="tabs" style="padding:0 24px;margin-bottom:0;">
+      <div class="tab active" onclick="vTab(this,0)">Overview</div>
+      <div class="tab" onclick="vTab(this,1)">Vehicles</div>
+      <div class="tab" onclick="vTab(this,2)">Payouts</div>
+    </div>
+    <div class="modal-body" style="padding-top:16px;">
+      <div id="pOverview"></div>
+      <div id="pVehicles" style="display:none;"></div>
+      <div id="pPayouts" style="display:none;overflow-x:auto;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Vendor Modal -->
+<div class="modal-overlay" id="editVendorModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title">Edit Vendor</div>
+      <button class="icon-btn" onclick="FleetDB.closeModal('editVendorModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="evId"/>
+      <div class="form-group"><label class="form-label">Vendor Name <span class="required">*</span></label><input type="text" class="form-input" id="evName"/></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Contact Person</label><input type="text" class="form-input" id="evContact"/></div>
+        <div class="form-group"><label class="form-label">Phone</label><input type="tel" class="form-input" id="evPhone"/></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Default Commission %</label><input type="number" class="form-input" id="evComm" min="0" max="100"/></div>
+        <div class="form-group"><label class="form-label">Status</label>
+          <select class="form-select" id="evStatus">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="FleetDB.closeModal('editVendorModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEditVendor()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Vendor Modal -->
+<div class="modal-overlay" id="addVendorModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title">Add New Vendor</div>
+      <button class="icon-btn" onclick="FleetDB.closeModal('addVendorModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Vendor Name <span class="required">*</span></label><input type="text" class="form-input" id="nvName" placeholder="e.g. Ahmed Traders"/></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Contact Person</label><input type="text" class="form-input" id="nvContact" placeholder="Name"/></div>
+        <div class="form-group"><label class="form-label">Phone</label><input type="tel" class="form-input" id="nvPhone" placeholder="0300-0000000"/></div>
+      </div>
+      <div class="form-group"><label class="form-label">Default Commission %</label><input type="number" class="form-input" id="nvComm" placeholder="15" min="0" max="100"/></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="FleetDB.closeModal('addVendorModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveVendor()">Save Vendor</button>
+    </div>
+  </div>
+</div>
+
+<!-- Monthly Statement Picker -->
+<div class="modal-overlay" id="stmtModal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Print Vendor Statement</div>
+        <div style="font-size:12px;color:var(--text-muted);" id="stmtVendorName">—</div>
+      </div>
+      <button class="icon-btn" onclick="FleetDB.closeModal('stmtModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Statement Period</label>
+        <select class="form-select" id="stmtPeriod" onchange="toggleMonthInput()">
+          <option value="all">All Time</option>
+          <option value="month" selected>Specific Month</option>
+          <option value="year">Full Year</option>
+        </select>
+      </div>
+      <div class="form-group" id="stmtMonthGroup">
+        <label class="form-label">Month</label>
+        <input type="month" class="form-input" id="stmtMonth"/>
+      </div>
+      <div class="form-group" id="stmtYearGroup" style="display:none;">
+        <label class="form-label">Year</label>
+        <select class="form-select" id="stmtYear"></select>
+      </div>
+      <div style="padding:10px 12px;background:var(--bg-elevated);border-radius:var(--r-sm);font-size:12px;color:var(--text-muted);">
+        A print dialog will open. Use your browser's "Save as PDF" option to export a PDF.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="FleetDB.closeModal('stmtModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="generateStatement()">🖨 Generate &amp; Print</button>
+    </div>
+  </div>
+</div>
+
+<!-- Payout Modal -->
+<div class="modal-overlay" id="payoutModal">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header">
+      <div class="modal-title">Issue Payout</div>
+      <button class="icon-btn" onclick="FleetDB.closeModal('payoutModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:linear-gradient(135deg,#264653,#2A9D8F);border-radius:var(--r-lg);padding:20px;margin-bottom:20px;color:white;text-align:center;">
+        <div style="font-size:12px;opacity:.8;margin-bottom:4px;">Paying to</div>
+        <div style="font-size:18px;font-weight:700;" id="pyVendorName">—</div>
+        <div style="font-size:12px;opacity:.7;margin-top:4px;">Available Balance</div>
+        <div style="font-size:32px;font-weight:700;font-family:var(--mono);margin-top:4px;" id="pyBal">—</div>
+      </div>
+      <div class="form-group"><label class="form-label">Amount <span class="required">*</span></label><div class="input-group"><span class="input-prefix">₨</span><input type="number" class="form-input" id="pyAmt"/></div></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Method</label><select class="form-select" id="pyMethod"><option>Bank Transfer</option><option>Cash</option><option>Cheque</option></select></div>
+        <div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="pyDate"/></div>
+      </div>
+      <div class="form-group"><label class="form-label">Notes</label><input type="text" class="form-input" id="pyNotes" placeholder="Reference…"/></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="FleetDB.closeModal('payoutModal')">Cancel</button>
+      <button class="btn btn-primary" style="background:var(--emerald);" onclick="confirmPayout()">✓ Confirm Payout</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase (cloud sync + auth) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-sync.js"></script>
+<script src="data.js"></script>
+<script>
+FleetDB.init('vendors.html');
+document.getElementById('pyDate').value = FleetDB.today();
+
+let selectedVendorId = null;
+
+function renderSummary() {
+  const vendors = FleetDB.getVendors();
+  const total = vendors.reduce((s,v) => s + Math.max(0, FleetDB.getVendorBalance(v.id)), 0);
+  const active = vendors.filter(v => v.status === 'active').length;
+  document.getElementById('vendorSummary').innerHTML = [
+    ['Total Vendors', vendors.length, ''],
+    ['Active', active, 'color:var(--emerald)'],
+    ['Total Liability', FleetDB.fmtMoney(total), 'color:var(--amber)'],
+    ['Total Vehicles', FleetDB.getVehicles().length, ''],
+  ].map(([l,v,s]) => `<div class="card" style="padding:16px;">
+    <div style="font-size:10px;color:var(--text-muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:5px;">${l}</div>
+    <div style="font-size:22px;font-weight:700;${s}">${v}</div>
+  </div>`).join('');
+}
+
+function renderVendors() {
+  const q = (document.getElementById('vSearch').value||'').toLowerCase();
+  const vendors = FleetDB.getVendors().filter(v => !q || (v.name||'').toLowerCase().includes(q) || (v.contact||'').toLowerCase().includes(q));
+  const E = FleetDB.escapeHtml;
+  document.getElementById('vendorGrid').innerHTML = vendors.map(v => {
+    const stats = FleetDB.getVendorStats(v.id);
+    const bal = stats.balance;
+    return `<div class="entity-card" onclick="openProfile('${v.id}')">
+      <div class="entity-card-header">
+        <div class="entity-avatar" style="background:${v.color||'#2A9D8F'}33;color:${v.color||'#2A9D8F'};">${E((v.name||'?')[0])}</div>
+        <div class="entity-card-info">
+          <div class="entity-name">${E(v.name)}</div>
+          <div class="entity-meta">${E(v.contact)} · ${E(v.phone)}</div>
+        </div>
+        <span class="badge ${v.status==='active'?'badge-green':'badge-muted'}"><span class="badge-dot"></span>${E(v.status)}</span>
+      </div>
+      <div class="entity-stats">
+        <div><div class="entity-stat-label">Balance Due</div><div class="entity-stat-value" style="color:${bal>100000?'var(--amber)':'inherit'};">${FleetDB.fmtMoney(bal)}</div></div>
+        <div><div class="entity-stat-label">Vehicles</div><div class="entity-stat-value">${stats.vehicleCount}</div></div>
+        <div><div class="entity-stat-label">Lifetime Earned</div><div class="entity-stat-value">${FleetDB.fmtMoney(stats.lifetime)}</div></div>
+        <div><div class="entity-stat-label">Commission</div><div class="entity-stat-value">${v.commRate}%</div></div>
+      </div>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="event.stopPropagation();openProfile('${v.id}')">Profile</button>
+        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="event.stopPropagation();editVendor('${v.id}')">Edit</button>
+        <button class="btn btn-sm" style="flex:1;background:var(--emerald-subtle);color:var(--emerald);border:1px solid var(--emerald-border);" onclick="event.stopPropagation();openPayout('${v.id}')">⇄ Payout</button>
+        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="event.stopPropagation();openStmtModal('${v.id}')">🖨 Print</button>
+        <button class="btn btn-sm" style="flex:1;background:var(--red-subtle,rgba(239,68,68,.1));color:var(--red);border:1px solid rgba(239,68,68,.2);" onclick="event.stopPropagation();deleteVendorSafe('${v.id}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty-state"><div class="empty-state-icon">◆</div><div class="empty-state-title">No vendors found</div></div>';
+}
+
+function openProfile(id) {
+  const v = FleetDB.getVendor(id);
+  if (!v) return;
+  selectedVendorId = id;
+  const E = FleetDB.escapeHtml;
+  const stats = FleetDB.getVendorStats(id);
+  document.getElementById('pName').textContent = v.name;
+  document.getElementById('pMeta').textContent = `${stats.vehicleCount} vehicles · ${v.contact}`;
+  const av = document.getElementById('pAv');
+  av.textContent = v.name[0]; av.style.background = v.color; av.style.color = 'white';
+
+  document.getElementById('pOverview').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+      <div style="background:var(--bg-elevated);border-radius:var(--r-md);padding:16px;border:1px solid var(--border);text-align:center;">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Current Balance</div>
+        <div class="mono fw-bold" style="font-size:22px;color:var(--accent);">${FleetDB.fmtMoney(stats.balance)}</div>
+      </div>
+      <div style="background:var(--bg-elevated);border-radius:var(--r-md);padding:16px;border:1px solid var(--border);text-align:center;">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Lifetime Earnings</div>
+        <div class="mono fw-bold" style="font-size:22px;">${FleetDB.fmtMoney(stats.lifetime)}</div>
+      </div>
+    </div>
+    <div class="stat-row"><span class="stat-row-label">Vehicles</span><span class="stat-row-value">${stats.vehicleCount}</span></div>
+    <div class="stat-row"><span class="stat-row-label">Commission Rate</span><span class="stat-row-value">${v.commRate}%</span></div>
+    <div class="stat-row"><span class="stat-row-label">Total Trips</span><span class="stat-row-value">${stats.tripCount}</span></div>
+    <div class="stat-row"><span class="stat-row-label">Lifetime Paid Out</span><span class="stat-row-value">${FleetDB.fmtMoney(stats.lifetimePaid)}</span></div>
+    <div class="stat-row"><span class="stat-row-label">Last Payout</span><span class="stat-row-value">${stats.lastPayout}</span></div>
+    <div class="stat-row"><span class="stat-row-label">Status</span><span class="stat-row-value"><span class="badge ${v.status==='active'?'badge-green':'badge-muted'}">${E(v.status)}</span></span></div>
+    <div style="margin-top:16px;">
+      <button class="btn btn-primary" style="width:100%;height:42px;background:var(--emerald);" onclick="FleetDB.closeModal('vendorProfileModal');openPayout('${id}')">⇄ Issue Payout</button>
+    </div>`;
+
+  const vVehicles = FleetDB.getVehicles().filter(vh => vh.vendorId === id);
+  document.getElementById('pVehicles').innerHTML = `<div style="display:flex;flex-direction:column;gap:8px;">${vVehicles.map(vh => {
+    const d = FleetDB.getDriver(vh.driverId);
+    return `<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--bg-elevated);border-radius:var(--r-md);border:1px solid var(--border);">
+      <span style="font-size:20px;">🚗</span>
+      <div style="flex:1;"><div style="font-size:13px;font-weight:600;">${E(vh.plate)}</div><div style="font-size:11px;color:var(--text-muted);">${E(vh.model)} · ${E(d ? d.name : 'No driver')}</div></div>
+      <span class="badge badge-${vh.status==='active'?'green':vh.status==='maintenance'?'amber':'muted'}">${E(vh.status)}</span>
+    </div>`;
+  }).join('') || '<div style="text-align:center;padding:20px;color:var(--text-muted);">No vehicles assigned</div>'}</div>`;
+
+  const payouts = FleetDB.getPayouts().filter(p => p.vendorId === id);
+  document.getElementById('pPayouts').innerHTML = payouts.length ? `<table><thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Ref</th></tr></thead><tbody>${payouts.map(p=>`<tr>
+    <td class="td-mono">${p.date}</td><td class="td-amount positive">PKR ${p.amount.toLocaleString()}</td>
+    <td><span class="badge badge-teal">${E(p.method)}</span></td><td class="td-mono">${p.id}</td>
+  </tr>`).join('')}</tbody></table>`
+  : '<div style="text-align:center;padding:24px;color:var(--text-muted);">No payouts recorded</div>';
+
+  vTab(document.querySelector('#vendorProfileModal .tab'), 0);
+  FleetDB.openModal('vendorProfileModal');
+}
+
+function vTab(el, idx) {
+  document.querySelectorAll('#vendorProfileModal .tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  ['pOverview','pVehicles','pPayouts'].forEach((id,i)=>{document.getElementById(id).style.display=i===idx?'':'none';});
+}
+
+function openPayout(id) {
+  const v = FleetDB.getVendor(id);
+  if (!v) return;
+  selectedVendorId = id;
+  const bal = FleetDB.getVendorBalance(id);
+  document.getElementById('pyVendorName').textContent = v.name;
+  document.getElementById('pyBal').textContent = FleetDB.fmtMoney(bal);
+  document.getElementById('pyAmt').value = Math.max(0, bal);
+  FleetDB.openModal('payoutModal');
+}
+
+function editVendor(id) {
+  const v = FleetDB.getVendor(id);
+  if (!v) return;
+  document.getElementById('evId').value      = v.id;
+  document.getElementById('evName').value    = v.name;
+  document.getElementById('evContact').value = v.contact || '';
+  document.getElementById('evPhone').value   = v.phone   || '';
+  document.getElementById('evComm').value    = v.commRate || 15;
+  document.getElementById('evStatus').value  = v.status  || 'active';
+  FleetDB.openModal('editVendorModal');
+}
+
+function saveEditVendor() {
+  const id   = document.getElementById('evId').value;
+  const name = document.getElementById('evName').value.trim();
+  if (!name) { FleetDB.showToast('Vendor name required', 'error'); return; }
+  const commRate = parseFloat(document.getElementById('evComm').value);
+  if (!isNaN(commRate) && (commRate < 0 || commRate > 100)) { FleetDB.showToast('Commission must be 0–100%', 'error'); return; }
+  FleetDB.updateVendor(id, {
+    name,
+    contact:  document.getElementById('evContact').value.trim(),
+    phone:    document.getElementById('evPhone').value.trim(),
+    commRate: isNaN(commRate) ? 15 : commRate,
+    status:   document.getElementById('evStatus').value,
+  });
+  FleetDB.closeModal('editVendorModal');
+  FleetDB.showToast('Vendor updated — ' + name);
+  renderSummary();
+  renderVendors();
+}
+
+function confirmPayout() {
+  const amt = parseFloat(document.getElementById('pyAmt').value) || 0;
+  if (!amt || amt <= 0) { FleetDB.showToast('Enter a valid amount', 'error'); return; }
+  const bal = FleetDB.getVendorBalance(selectedVendorId);
+  if (amt > bal && !confirm(`Amount ${FleetDB.fmtMoney(amt)} exceeds available balance ${FleetDB.fmtMoney(bal)}.\n\nProceed with overpayment?`)) return;
+  FleetDB.addPayout({
+    vendorId: selectedVendorId,
+    amount: amt,
+    method: document.getElementById('pyMethod').value,
+    date: document.getElementById('pyDate').value || FleetDB.today(),
+    notes: document.getElementById('pyNotes').value,
+  });
+  FleetDB.closeModal('payoutModal');
+  FleetDB.showToast('Payout recorded — ' + FleetDB.fmtMoney(amt));
+  renderSummary();
+  renderVendors();
+}
+
+function saveVendor() {
+  const name = document.getElementById('nvName').value.trim();
+  if (!name) { FleetDB.showToast('Enter vendor name', 'error'); return; }
+  const commRate = parseFloat(document.getElementById('nvComm').value);
+  if (!isNaN(commRate) && (commRate < 0 || commRate > 100)) { FleetDB.showToast('Commission must be 0–100%', 'error'); return; }
+  const colors = ['#2A9D8F','#e9c46a','#e76f51','#a78bfa','#60a5fa','#34d399'];
+  FleetDB.addVendor({
+    name, contact: document.getElementById('nvContact').value,
+    phone: document.getElementById('nvPhone').value,
+    commRate: isNaN(commRate) ? 15 : commRate,
+    color: colors[FleetDB.getVendors().length % colors.length],
+  });
+  FleetDB.closeModal('addVendorModal');
+  FleetDB.showToast('Vendor added — ' + name);
+  ['nvName','nvContact','nvPhone','nvComm'].forEach(id => document.getElementById(id).value = '');
+  renderSummary(); renderVendors();
+}
+
+function deleteVendorSafe(id) {
+  const v        = FleetDB.getVendor(id);
+  if (!v) return;
+  const vehicles = FleetDB.getVehicles().filter(x => x.vendorId === id);
+  const trips    = FleetDB.getTrips().filter(x => x.vendorId === id);
+  const payouts  = FleetDB.getPayouts().filter(x => x.vendorId === id);
+  const bal      = FleetDB.getVendorBalance(id);
+
+  let msg = `Delete vendor "${v.name}"?\n\n`;
+  if (vehicles.length || trips.length || payouts.length) {
+    msg += `WARNING — linked records will be disconnected:\n`;
+    if (vehicles.length) msg += `  • ${vehicles.length} vehicle(s): ${vehicles.map(x=>x.plate).join(', ')}\n`;
+    if (trips.length)    msg += `  • ${trips.length} trip record(s)\n`;
+    if (payouts.length)  msg += `  • ${payouts.length} payout record(s)\n`;
+    if (bal > 0)         msg += `  • Outstanding balance: PKR ${bal.toLocaleString()}\n`;
+    msg += `\nThis cannot be undone.`;
+  } else {
+    msg += 'This cannot be undone.';
+  }
+
+  if (!confirm(msg)) return;
+  FleetDB.deleteVendor(id);
+  FleetDB.showToast(`Vendor "${v.name}" deleted`, 'error');
+  renderSummary();
+  renderVendors();
+}
+
+let stmtVendorId = null;
+
+function openStmtModal(id) {
+  stmtVendorId = id;
+  const v = FleetDB.getVendor(id);
+  document.getElementById('stmtVendorName').textContent = v ? v.name : '';
+  document.getElementById('stmtMonth').value = new Date().toISOString().slice(0, 7);
+  document.getElementById('stmtPeriod').value = 'month';
+
+  // Populate year dropdown from actual trip years
+  const years = [...new Set(FleetDB.getTrips().filter(t => t.vendorId === id).map(t => t.date.slice(0, 4)))].sort().reverse();
+  const ySel = document.getElementById('stmtYear');
+  ySel.innerHTML = years.length
+    ? years.map(y => `<option value="${y}">${y}</option>`).join('')
+    : `<option value="${new Date().getFullYear()}">${new Date().getFullYear()}</option>`;
+
+  toggleMonthInput();
+  FleetDB.openModal('stmtModal');
+}
+
+function toggleMonthInput() {
+  const period = document.getElementById('stmtPeriod').value;
+  document.getElementById('stmtMonthGroup').style.display = period === 'month' ? '' : 'none';
+  document.getElementById('stmtYearGroup').style.display  = period === 'year'  ? '' : 'none';
+}
+
+function generateStatement() {
+  const id     = stmtVendorId;
+  const period = document.getElementById('stmtPeriod').value;
+  const month  = document.getElementById('stmtMonth').value;
+  const year   = document.getElementById('stmtYear').value;
+
+  let periodLabel = 'All Time';
+  let filterFn    = () => true;
+  if (period === 'month' && month) {
+    periodLabel = new Date(month + '-01').toLocaleDateString('en-US', { month:'long', year:'numeric' });
+    filterFn    = t => t.date.startsWith(month);
+  } else if (period === 'year' && year) {
+    periodLabel = 'Year ' + year;
+    filterFn    = t => t.date.startsWith(year);
+  }
+
+  FleetDB.closeModal('stmtModal');
+
+  const html = FleetDB.buildVendorStatementHTML({ vendorId: id, periodLabel, filterFn });
+  if (!html) { FleetDB.showToast('Vendor not found', 'error'); return; }
+
+  FleetDB.openPrintWindow(html);
+}
+
+function exportVendors() {
+  const rows = [['Vendor Name','Contact','Phone','Commission %','Status','Vehicles','Total Trips','Lifetime Earned (PKR)','Total Paid Out (PKR)','Balance Due (PKR)']];
+  FleetDB.getVendors().forEach(v => {
+    const stats = FleetDB.getVendorStats(v.id);
+    rows.push([v.name, v.contact||'', v.phone||'', v.commRate, v.status, stats.vehicleCount, stats.tripCount, stats.lifetime, stats.lifetimePaid, stats.balance]);
+  });
+  const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'vendors-' + FleetDB.today() + '.csv';
+  a.click();
+  FleetDB.showToast('Vendors exported');
+}
+
+renderSummary();
+renderVendors();
+</script>
+</body>
+</html>

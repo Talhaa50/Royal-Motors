@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Expenses — Royal Motors</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar" id="topbar"></header>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <nav class="sidebar" id="sidebar"></nav>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Expenses</div>
+        <div class="page-subtitle" id="expSubtitle">Office operating costs</div>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-primary" onclick="openAddExpense()">+ Add Expense</button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid-4 mb-5" id="expStats"></div>
+
+    <!-- Two column layout -->
+    <div style="display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start;">
+
+      <!-- LEFT: Expense Log -->
+      <div>
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Expense Log</div>
+              <div class="card-subtitle">One-off and variable costs</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openAddExpense()">+ Add</button>
+          </div>
+          <div style="padding:0 20px 14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <div class="topbar-search" style="width:220px;">
+              <span class="search-icon">⌕</span>
+              <input type="text" placeholder="Search description…" id="expSearch" oninput="renderExpenses()"/>
+            </div>
+            <select class="form-select" style="width:170px;height:34px;" id="expCatF" onchange="renderExpenses()">
+              <option value="">All Categories</option>
+            </select>
+            <input type="month" class="form-input" style="height:34px;width:150px;" id="expMonthF" onchange="renderExpenses()"/>
+            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('expMonthF').value='';renderExpenses()">Clear</button>
+          </div>
+          <div class="table-wrap" style="margin:0;border:none;">
+            <table>
+              <thead><tr>
+                <th>ID</th><th>Date</th><th>Category</th><th>Description</th><th>Amount</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="expBody"></tbody>
+            </table>
+          </div>
+          <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:12px;color:var(--text-muted);" id="expFooterLabel">Showing all</span>
+            <span style="font-size:14px;font-weight:700;color:var(--text-primary);" id="expFooterTotal">PKR 0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Fixed Monthly Costs -->
+      <div>
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Fixed Monthly Costs</div>
+              <div class="card-subtitle">Auto-counted every month</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openAddFixed()">+ Add</button>
+          </div>
+          <div class="card-body" id="fixedList" style="padding-top:4px;"></div>
+          <div style="padding:10px 20px 14px;border-top:1px solid var(--border);">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12px;color:var(--text-muted);">Total per month</span>
+              <span style="font-size:16px;font-weight:700;color:var(--red);" id="fixedTotal">PKR 0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick stats for this month -->
+        <div class="card mt-5">
+          <div class="card-header"><div class="card-title">This Month</div></div>
+          <div class="card-body" id="monthBreakdown" style="padding-top:6px;"></div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+<nav class="mobile-nav" id="mobileNav"></nav>
+
+<!-- Add / Edit Expense Modal -->
+<div class="modal-overlay" id="expModal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="expModalTitle">Add Expense</div>
+        <div style="font-size:12px;color:var(--text-muted);" id="expModalId"></div>
+      </div>
+      <button class="icon-btn" onclick="FleetDB.closeModal('expModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="expEditId"/>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Date <span class="required">*</span></label>
+          <input type="date" class="form-input" id="expDate"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category <span class="required">*</span></label>
+          <select class="form-select" id="expCat"></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description <span class="required">*</span></label>
+        <input type="text" class="form-input" id="expDesc" placeholder="e.g. Staff lunch, Office stationery…"/>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Amount (PKR) <span class="required">*</span></label>
+          <div class="input-group"><span class="input-prefix">₨</span><input type="number" class="form-input" id="expAmt" placeholder="0" min="0"/></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <input type="text" class="form-input" id="expNotes" placeholder="Optional"/>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="FleetDB.closeModal('expModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveExpense()">Save Expense</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit Fixed Cost Modal -->
+<div class="modal-overlay" id="fixedModal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="fixedModalTitle">Add Fixed Cost</div>
+        <div style="font-size:12px;color:var(--text-muted);" id="fixedModalId"></div>
+      </div>
+      <button class="icon-btn" onclick="FleetDB.closeModal('fixedModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="fixedEditId"/>
+      <div class="form-group">
+        <label class="form-label">Name <span class="required">*</span></label>
+        <input type="text" class="form-input" id="fixedName" placeholder="e.g. Office Rent, Electricity…"/>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-select" id="fixedCat"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Monthly Amount (PKR) <span class="required">*</span></label>
+          <div class="input-group"><span class="input-prefix">₨</span><input type="number" class="form-input" id="fixedAmt" placeholder="0" min="0"/></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <input type="text" class="form-input" id="fixedNotes" placeholder="Optional"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="FleetDB.closeModal('fixedModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveFixed()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase (cloud sync + auth) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-sync.js"></script>
+<script src="data.js"></script>
+<script>
+FleetDB.init('expenses.html');
+
+const CATS = FleetDB.EXP_CATS;
+
+/* ── Populate category selects ── */
+function populateCatSelect(selId) {
+  const sel = document.getElementById(selId);
+  sel.innerHTML = Object.entries(CATS).map(([v,l]) =>
+    `<option value="${v}">${l}</option>`).join('');
+}
+populateCatSelect('expCat');
+populateCatSelect('fixedCat');
+
+// Filter category dropdown
+const catFilter = document.getElementById('expCatF');
+catFilter.innerHTML = '<option value="">All Categories</option>' +
+  Object.entries(CATS).map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
+
+/* ── Stats ── */
+function renderStats() {
+  const now     = new Date();
+  const ym      = now.toISOString().slice(0,7); // YYYY-MM
+  const yearPfx = now.getFullYear() + '-';
+
+  const all     = FleetDB.getExpenses();
+  const fixed   = FleetDB.getFixedCosts();
+  const fixedMo = fixed.filter(f => f.active).reduce((s,f) => s + (f.amount||0), 0);
+
+  const thisMoVar = all.filter(e => (e.date||'').startsWith(ym))
+                       .reduce((s,e) => s + (e.amount||0), 0);
+  const thisMonthTotal = thisMoVar + fixedMo;
+
+  const lastMo  = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0,7);
+  const lastMoVar = all.filter(e => (e.date||'').startsWith(lastMo))
+                        .reduce((s,e) => s + (e.amount||0), 0);
+
+  const yearVar = all.filter(e => (e.date||'').startsWith(yearPfx))
+                     .reduce((s,e) => s + (e.amount||0), 0);
+  const yearMonths = now.getMonth() + 1;
+  const yearTotal  = yearVar + fixedMo * yearMonths;
+
+  document.getElementById('expSubtitle').textContent =
+    'This month: ' + FleetDB.fmtMoney(thisMonthTotal) + ' · Fixed/month: ' + FleetDB.fmtMoney(fixedMo);
+
+  document.getElementById('expStats').innerHTML = [
+    ['This Month',     FleetDB.fmtMoney(thisMonthTotal), 'color:var(--red)'],
+    ['Fixed / Month',  FleetDB.fmtMoney(fixedMo),        'color:var(--amber)'],
+    ['Variable This Mo', FleetDB.fmtMoney(thisMoVar),    ''],
+    ['Year to Date',   FleetDB.fmtMoney(yearTotal),      'color:var(--text-secondary)'],
+  ].map(([l,v,s]) => `<div class="card" style="padding:14px;">
+    <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">${l}</div>
+    <div style="font-size:18px;font-weight:700;${s}">${v}</div>
+  </div>`).join('');
+
+  // Month breakdown by category
+  const monthExps = all.filter(e => (e.date||'').startsWith(ym));
+  const byCat = {};
+  monthExps.forEach(e => { byCat[e.category] = (byCat[e.category]||0) + (e.amount||0); });
+  fixed.filter(f=>f.active).forEach(f => { byCat[f.category] = (byCat[f.category]||0) + (f.amount||0); });
+
+  const rows = Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,amt]) =>
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);">
+       <span style="font-size:12px;color:var(--text-secondary);">${CATS[cat]||cat}</span>
+       <span style="font-size:13px;font-weight:600;font-family:var(--mono);color:var(--red);">
+         PKR ${amt.toLocaleString()}
+       </span>
+     </div>`).join('');
+
+  document.getElementById('monthBreakdown').innerHTML = rows ||
+    '<div style="font-size:12px;color:var(--text-muted);padding:4px 0;">No expenses this month</div>';
+}
+
+/* ── Fixed Costs List ── */
+function renderFixed() {
+  const fixed = FleetDB.getFixedCosts();
+  const total = fixed.filter(f=>f.active).reduce((s,f)=>s+(f.amount||0),0);
+  document.getElementById('fixedTotal').textContent = 'PKR ' + total.toLocaleString();
+
+  if (!fixed.length) {
+    document.getElementById('fixedList').innerHTML =
+      '<div style="font-size:12px;color:var(--text-muted);padding:4px 0 8px;">No fixed costs yet. Add rent, electricity, etc.</div>';
+    return;
+  }
+
+  const E = FleetDB.escapeHtml;
+  document.getElementById('fixedList').innerHTML = fixed.map(f =>
+    `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+       <div style="flex:1;min-width:0;">
+         <div style="font-size:13px;font-weight:600;">${E(f.name)}</div>
+         <div style="font-size:11px;color:var(--text-muted);">${CATS[f.category]||E(f.category)}</div>
+       </div>
+       <span style="font-size:13px;font-weight:700;font-family:var(--mono);color:var(--red);flex-shrink:0;">
+         PKR ${(f.amount||0).toLocaleString()}
+       </span>
+       <div style="display:flex;gap:4px;flex-shrink:0;">
+         <button class="btn btn-secondary btn-sm" onclick="editFixed('${f.id}')">Edit</button>
+         <button class="btn btn-danger btn-sm" onclick="removeFixed('${f.id}')">Del</button>
+       </div>
+     </div>`).join('');
+}
+
+/* ── Expense Log ── */
+function renderExpenses() {
+  const q    = (document.getElementById('expSearch').value  || '').toLowerCase();
+  const catF = document.getElementById('expCatF').value;
+  const monF = document.getElementById('expMonthF').value;
+
+  let exps = FleetDB.getExpenses().sort((a,b) => (b.date||'').localeCompare(a.date||''));
+
+  if (catF) exps = exps.filter(e => e.category === catF);
+  if (monF) exps = exps.filter(e => (e.date||'').startsWith(monF));
+  if (q)    exps = exps.filter(e =>
+    (e.description||'').toLowerCase().includes(q) ||
+    (e.notes||'').toLowerCase().includes(q)
+  );
+
+  const total = exps.reduce((s,e)=>s+(e.amount||0),0);
+  document.getElementById('expFooterLabel').textContent =
+    exps.length + ' expense' + (exps.length!==1?'s':'') + (monF?' · '+monF:'');
+  document.getElementById('expFooterTotal').textContent = 'PKR ' + total.toLocaleString();
+
+  document.getElementById('expBody').innerHTML = exps.length
+    ? exps.map(e => `<tr>
+        <td class="td-mono" style="font-size:11px;color:var(--text-muted);">${e.id}</td>
+        <td class="td-mono" style="font-size:12px;">${e.date}</td>
+        <td style="font-size:12px;">${CATS[e.category]||e.category}</td>
+        <td style="font-size:13px;font-weight:500;">${FleetDB.escapeHtml(e.description)}${e.notes?'<div style="font-size:11px;color:var(--text-muted);">'+FleetDB.escapeHtml(e.notes)+'</div>':''}</td>
+        <td class="td-amount negative" style="font-weight:700;">PKR ${(e.amount||0).toLocaleString()}</td>
+        <td>
+          <div style="display:flex;gap:5px;">
+            <button class="btn btn-secondary btn-sm" onclick="editExpense('${e.id}')">Edit</button>
+            <button class="btn btn-danger btn-sm"    onclick="removeExpense('${e.id}')">Del</button>
+          </div>
+        </td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-muted);">No expenses found</td></tr>';
+}
+
+/* ── Add / Edit Expense ── */
+function openAddExpense() {
+  document.getElementById('expEditId').value   = '';
+  document.getElementById('expModalTitle').textContent = 'Add Expense';
+  document.getElementById('expModalId').textContent    = '';
+  document.getElementById('expDate').value     = FleetDB.today();
+  document.getElementById('expCat').value      = 'food';
+  document.getElementById('expDesc').value     = '';
+  document.getElementById('expAmt').value      = '';
+  document.getElementById('expNotes').value    = '';
+  FleetDB.openModal('expModal');
+}
+
+function editExpense(id) {
+  const e = FleetDB.getExpense(id);
+  if (!e) return;
+  document.getElementById('expEditId').value   = e.id;
+  document.getElementById('expModalTitle').textContent = 'Edit Expense';
+  document.getElementById('expModalId').textContent    = e.id;
+  document.getElementById('expDate').value     = e.date        || '';
+  document.getElementById('expCat').value      = e.category    || 'miscellaneous';
+  document.getElementById('expDesc').value     = e.description || '';
+  document.getElementById('expAmt').value      = e.amount      || '';
+  document.getElementById('expNotes').value    = e.notes       || '';
+  FleetDB.openModal('expModal');
+}
+
+function saveExpense() {
+  const desc = document.getElementById('expDesc').value.trim();
+  const amt  = parseFloat(document.getElementById('expAmt').value) || 0;
+  if (!desc) { FleetDB.showToast('Enter a description', 'error'); return; }
+  if (!amt)  { FleetDB.showToast('Enter an amount',     'error'); return; }
+
+  const data = {
+    date:        document.getElementById('expDate').value,
+    category:    document.getElementById('expCat').value,
+    description: desc,
+    amount:      amt,
+    notes:       document.getElementById('expNotes').value.trim(),
+  };
+
+  const id = document.getElementById('expEditId').value;
+  if (id) {
+    FleetDB.updateExpense(id, data);
+    FleetDB.showToast('Expense updated');
+  } else {
+    const e = FleetDB.addExpense(data);
+    FleetDB.showToast('Expense added — ' + e.id);
+  }
+  FleetDB.closeModal('expModal');
+  refresh();
+}
+
+function removeExpense(id) {
+  if (!confirm('Delete this expense?')) return;
+  FleetDB.deleteExpense(id);
+  FleetDB.showToast('Expense deleted');
+  refresh();
+}
+
+/* ── Add / Edit Fixed Cost ── */
+function openAddFixed() {
+  document.getElementById('fixedEditId').value    = '';
+  document.getElementById('fixedModalTitle').textContent = 'Add Fixed Cost';
+  document.getElementById('fixedModalId').textContent    = '';
+  document.getElementById('fixedName').value      = '';
+  document.getElementById('fixedCat').value       = 'rent';
+  document.getElementById('fixedAmt').value       = '';
+  document.getElementById('fixedNotes').value     = '';
+  FleetDB.openModal('fixedModal');
+}
+
+function editFixed(id) {
+  const f = FleetDB.getFixedCost(id);
+  if (!f) return;
+  document.getElementById('fixedEditId').value    = f.id;
+  document.getElementById('fixedModalTitle').textContent = 'Edit Fixed Cost';
+  document.getElementById('fixedModalId').textContent    = f.id;
+  document.getElementById('fixedName').value      = f.name     || '';
+  document.getElementById('fixedCat').value       = f.category || 'rent';
+  document.getElementById('fixedAmt').value       = f.amount   || '';
+  document.getElementById('fixedNotes').value     = f.notes    || '';
+  FleetDB.openModal('fixedModal');
+}
+
+function saveFixed() {
+  const name = document.getElementById('fixedName').value.trim();
+  const amt  = parseFloat(document.getElementById('fixedAmt').value) || 0;
+  if (!name) { FleetDB.showToast('Enter a name', 'error'); return; }
+  if (!amt)  { FleetDB.showToast('Enter an amount', 'error'); return; }
+
+  const data = {
+    name,
+    category: document.getElementById('fixedCat').value,
+    amount:   amt,
+    notes:    document.getElementById('fixedNotes').value.trim(),
+    active:   true,
+  };
+
+  const id = document.getElementById('fixedEditId').value;
+  if (id) {
+    FleetDB.updateFixedCost(id, data);
+    FleetDB.showToast('Fixed cost updated');
+  } else {
+    const f = FleetDB.addFixedCost(data);
+    FleetDB.showToast('Fixed cost added — ' + f.id);
+  }
+  FleetDB.closeModal('fixedModal');
+  refresh();
+}
+
+function removeFixed(id) {
+  if (!confirm('Delete this fixed cost?')) return;
+  FleetDB.deleteFixedCost(id);
+  FleetDB.showToast('Fixed cost deleted');
+  refresh();
+}
+
+/* ── Refresh all ── */
+function refresh() {
+  renderStats();
+  renderFixed();
+  renderExpenses();
+}
+
+refresh();
+</script>
+</body>
+</html>

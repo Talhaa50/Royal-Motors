@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Login — Royal Motors</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<div class="login-shell">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-icon">F</div>
+      <span class="login-logo-name">Royal Motors</span>
+    </div>
+    <div class="login-title">Welcome back</div>
+    <div class="login-sub">Sign in to your fleet management portal</div>
+
+    <div class="login-error" id="loginError">Incorrect username or password.</div>
+
+    <form onsubmit="doLogin(event)">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" class="form-input" id="loginUser" placeholder="you@example.com" autocomplete="username" autofocus/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <div class="input-group" style="position:relative;">
+          <input type="password" class="form-input" id="loginPass" placeholder="••••••••" autocomplete="current-password"/>
+          <button type="button" onclick="togglePwd()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;" id="eyeBtn">👁</button>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;height:40px;font-size:14px;margin-top:8px;">Sign In</button>
+    </form>
+
+    <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);text-align:center;font-size:11px;color:var(--text-muted);">
+      Royal Motors Transport Management · v2.0
+    </div>
+  </div>
+</div>
+
+<!-- Firebase (cloud sync + auth) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-sync.js"></script>
+<script src="data.js"></script>
+<script>
+// If already logged in this session, skip to booking
+if (sessionStorage.getItem('fo_auth') === '1') {
+  location.href = 'dispatch.html';
+}
+
+// Apply saved theme
+(function() {
+  const t = localStorage.getItem('fo_theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+})();
+
+function doLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('loginUser').value.trim();
+  const pass  = document.getElementById('loginPass').value;
+  const err   = document.getElementById('loginError');
+  const btn   = e.target.querySelector('button[type="submit"]');
+
+  if (!window.fbAuth) {
+    err.textContent = 'Firebase failed to load — check your internet connection.';
+    err.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Signing in…';
+
+  window.fbAuth.signInWithEmailAndPassword(email, pass)
+    .then(async (cred) => {
+      sessionStorage.setItem('fo_auth', '1');
+      // Pull this user's cloud data before entering the app.
+      try {
+        const pulled = await FleetSync.pull(cred.user.uid);
+        // First time on the cloud? Seed it from this device's current data.
+        if (!pulled) await FleetSync.pushAll(cred.user.uid);
+      } catch (e) { console.warn('Initial sync failed:', e); }
+      location.href = 'dispatch.html';
+    })
+    .catch((error) => {
+      btn.disabled = false; btn.textContent = 'Sign In';
+      err.textContent = friendlyAuthError(error);
+      err.style.display = 'block';
+      document.getElementById('loginPass').value = '';
+      document.getElementById('loginPass').focus();
+      setTimeout(() => { err.style.display = 'none'; }, 5000);
+    });
+}
+
+function friendlyAuthError(error) {
+  const c = (error && error.code) || '';
+  if (c.includes('invalid-credential') || c.includes('wrong-password') || c.includes('user-not-found'))
+    return 'Incorrect email or password.';
+  if (c.includes('invalid-email'))      return 'That email address is not valid.';
+  if (c.includes('too-many-requests'))  return 'Too many attempts — please wait a bit and try again.';
+  if (c.includes('network'))            return 'Network error — check your connection.';
+  return 'Sign in failed. ' + (error.message || c);
+}
+
+function togglePwd() {
+  const inp = document.getElementById('loginPass');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+</script>
+</body>
+</html>
