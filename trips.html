@@ -34,7 +34,8 @@
     <!-- Tab bar -->
     <div class="tab-bar">
       <button class="tab-btn active" id="tabBk"  onclick="showTab('bookings')">📋 Bookings</button>
-      <button class="tab-btn"        id="tabDt"  onclick="showTab('duties')">₨ Financial Duties</button>
+      <button class="tab-btn"        id="tabDt"  onclick="showTab('duties')">💰 Cashbook</button>
+      <button class="tab-btn"        id="tabInv" onclick="showTab('invoices')">📄 Customer Invoices</button>
     </div>
 
     <!-- ══════════ BOOKINGS TAB ══════════ -->
@@ -82,42 +83,75 @@
       <div id="bkPager"></div>
     </div>
 
-    <!-- ══════════ FINANCIAL DUTIES TAB ══════════ -->
+    <!-- ══════════ CASHBOOK TAB ══════════ -->
     <div id="panelDuties" style="display:none;">
 
+      <!-- Totals cards -->
+      <div id="cbStats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;"></div>
+
+      <!-- Filters -->
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
-        <div class="topbar-search" style="width:240px;">
-          <span class="search-icon">⌕</span>
-          <input type="text" placeholder="Search plate, vendor, driver…" id="tripSearch" aria-label="Search duties"/>
-        </div>
-        <select class="form-select" style="width:140px;height:34px;" id="statusF" onchange="tripPage=0;filterTrips()">
-          <option value="">All Status</option>
-          <option value="completed">Completed</option>
-          <option value="pending">Pending</option>
-          <option value="cancelled">Cancelled</option>
+        <select class="form-select" style="width:150px;height:34px;" id="cbFilter" onchange="renderCashbook()">
+          <option value="">All money</option>
+          <option value="in">Money In</option>
+          <option value="out">Money Out</option>
         </select>
-        <select class="form-select" style="width:160px;height:34px;" id="vendorF" onchange="tripPage=0;filterTrips()">
-          <option value="">All Vendors</option>
-        </select>
-        <input type="date" class="form-input" style="height:34px;width:145px;" id="dateF" onchange="tripPage=0;filterTrips()"/>
-        <button class="btn btn-secondary btn-sm" onclick="exportCSV()">⬇ CSV</button>
+        <input type="month" class="form-input" style="height:34px;width:150px;" id="cbMonth" onchange="renderCashbook()"/>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('cbMonth').value='';renderCashbook()">Clear</button>
+        <button class="btn btn-secondary btn-sm" onclick="openCashEntry()">＋ Add Cash In/Out</button>
+        <button class="btn btn-secondary btn-sm" onclick="downloadCashbook()">⬇ Download</button>
         <div style="margin-left:auto;font-size:13px;color:var(--text-secondary);">
-          <span id="rowCount" style="font-weight:600;color:var(--text-primary);">—</span> duties
+          <span id="cbCount" style="font-weight:600;color:var(--text-primary);">—</span> entries
         </div>
       </div>
-
-      <div class="grid-4 mb-5" id="tripStats"></div>
 
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>Duty ID</th><th>Date</th><th>Vehicle</th><th>Vendor</th><th>Driver</th><th>Customer</th>
-            <th>Revenue</th><th>Commission</th><th>Net</th><th>Status</th><th>Actions</th>
+            <th>Date</th><th>Type</th><th>Description</th>
+            <th style="text-align:right;">Money In</th><th style="text-align:right;">Money Out</th><th></th>
           </tr></thead>
-          <tbody id="tripsBody"></tbody>
+          <tbody id="cbBody"></tbody>
         </table>
       </div>
-      <div id="tripPager"></div>
+    </div>
+
+    <!-- ══════════ CUSTOMER INVOICES TAB ══════════ -->
+    <div id="panelInvoices" style="display:none;">
+
+      <!-- Sales summary cards -->
+      <div id="salesCards" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;"></div>
+
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+        <div class="topbar-search" style="width:240px;">
+          <span class="search-icon">⌕</span>
+          <input type="text" placeholder="Customer name or booking ID…" id="invSearch" aria-label="Search invoices"/>
+        </div>
+        <input type="month" class="form-input" style="height:34px;width:150px;" id="invMonth" onchange="renderInvoices()"/>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('invMonth').value='';renderInvoices()">Clear</button>
+        <div style="margin-left:auto;font-size:13px;color:var(--text-secondary);">
+          <span id="invCount" style="font-weight:600;color:var(--text-primary);">—</span> completed bookings
+        </div>
+      </div>
+      <div id="invList"></div>
+
+      <!-- Cash on hand / Close shift -->
+      <div class="card" style="margin-top:22px;padding:0;overflow:hidden;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:16px 20px;border-bottom:1px solid var(--border);">
+          <div>
+            <div style="font-size:14px;font-weight:700;">💵 Cash on Hand — Shift Close</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Reconcile counted cash against today's expected sales</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+            <div style="text-align:right;">
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);">Expected today</div>
+              <div id="cashExpected" style="font-size:20px;font-weight:700;font-family:var(--mono);color:var(--accent);">PKR 0</div>
+            </div>
+            <button class="btn btn-primary" onclick="openCloseShift()">🔒 Close Shift</button>
+          </div>
+        </div>
+        <div id="shiftHistory"></div>
+      </div>
     </div>
 
   </main>
@@ -341,6 +375,81 @@
   </div>
 </div>
 
+<!-- Close Shift Modal -->
+<div class="modal-overlay" id="closeShiftModal">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header">
+      <div class="modal-title">🔒 Close Shift</div>
+      <button class="icon-btn" onclick="FleetDB.closeModal('closeShiftModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;" id="csWhen"></div>
+
+      <div class="form-group">
+        <label class="form-label">Expected cash (today's sales)</label>
+        <div class="input-group"><span class="input-prefix">₨</span>
+          <input type="number" class="form-input" id="csExpected" readonly style="opacity:.7;"/></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Cash counted in hand <span class="required">*</span></label>
+        <div class="input-group"><span class="input-prefix">₨</span>
+          <input type="number" class="form-input" id="csCounted" min="0" placeholder="0" oninput="recalcShiftDiff()"/></div>
+      </div>
+      <div id="csDiffBox" style="text-align:center;padding:12px;border-radius:var(--r-md);background:var(--bg-elevated);margin-bottom:14px;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);">Difference</div>
+        <div id="csDiff" style="font-size:22px;font-weight:700;font-family:var(--mono);">—</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note (optional)</label>
+        <input type="text" class="form-input" id="csNote" placeholder="e.g. handed cash to owner / mechanic…"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="FleetDB.closeModal('closeShiftModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCloseShift()">Close Shift</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manual Cash Entry Modal -->
+<div class="modal-overlay" id="cashEntryModal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <div class="modal-title">＋ Add Cash Entry</div>
+      <button class="icon-btn" onclick="FleetDB.closeModal('cashEntryModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Type</label>
+        <div style="display:flex;gap:8px;">
+          <button type="button" id="ceInBtn"  class="btn btn-secondary" style="flex:1;" onclick="setCashType('in')">⬆ Cash In</button>
+          <button type="button" id="ceOutBtn" class="btn btn-secondary" style="flex:1;" onclick="setCashType('out')">⬇ Cash Out</button>
+        </div>
+        <input type="hidden" id="ceType" value="in"/>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Amount (PKR) <span class="required">*</span></label>
+          <div class="input-group"><span class="input-prefix">₨</span>
+            <input type="number" class="form-input" id="ceAmount" min="0" placeholder="0"/></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date</label>
+          <input type="date" class="form-input" id="ceDate"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note <span class="required">*</span></label>
+        <input type="text" class="form-input" id="ceNote" placeholder="e.g. extra cash in shop, paid mechanic…"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="FleetDB.closeModal('cashEntryModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCashEntry()">Save Entry</button>
+    </div>
+  </div>
+</div>
+
 <!-- Firebase (cloud sync + auth) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -359,22 +468,26 @@ function gotoTripPage(p) { tripPage = p; renderTripTable(); }
    TAB SWITCHING
 ════════════════════════ */
 function showTab(tab) {
-  const isBk = tab === 'bookings';
-  document.getElementById('panelBookings').style.display = isBk ? '' : 'none';
-  document.getElementById('panelDuties').style.display   = isBk ? 'none' : '';
-  document.getElementById('tabBk').classList.toggle('active', isBk);
-  document.getElementById('tabDt').classList.toggle('active', !isBk);
+  ['bookings','duties','invoices'].forEach(t => {
+    const el = document.getElementById('panel' + t.charAt(0).toUpperCase() + t.slice(1));
+    if (el) el.style.display = t === tab ? '' : 'none';
+  });
+  document.getElementById('tabBk').classList.toggle('active',  tab === 'bookings');
+  document.getElementById('tabDt').classList.toggle('active',  tab === 'duties');
+  document.getElementById('tabInv').classList.toggle('active', tab === 'invoices');
 
-  if (isBk) {
+  if (tab === 'bookings') {
     document.getElementById('pageSubtitle').textContent = 'All customer bookings';
-    document.getElementById('pageActions').innerHTML =
-      `<a href="dispatch.html" class="btn btn-primary">+ New Booking</a>`;
+    document.getElementById('pageActions').innerHTML = `<a href="dispatch.html" class="btn btn-primary">+ New Booking</a>`;
     renderBookings();
+  } else if (tab === 'duties') {
+    document.getElementById('pageSubtitle').textContent = 'Cashbook — all money in & out';
+    document.getElementById('pageActions').innerHTML = '';
+    renderCashbook();
   } else {
-    document.getElementById('pageSubtitle').textContent = 'Financial duty records for vendor settlement';
-    document.getElementById('pageActions').innerHTML =
-      `<button class="btn btn-secondary" onclick="exportCSV()">⬇ CSV</button>`;
-    filterTrips();
+    document.getElementById('pageSubtitle').textContent = 'Printable A4 invoices for completed bookings';
+    document.getElementById('pageActions').innerHTML = '';
+    renderInvoices();
   }
 }
 
@@ -398,10 +511,11 @@ function renderBookings() {
   const mf      = document.getElementById('bkMonth').value;   // 'YYYY-MM'
   const vehicles = FleetDB.getVehicles();
 
-  let bks = FleetDB.getBookings();
+  let bks = (FleetDB.getBookings() || []).filter(Boolean);
 
-  // Sort newest first
-  bks.sort((a, b) => (b.requestedDate || b.createdAt || '').localeCompare(a.requestedDate || a.createdAt || ''));
+  // Sort chronologically — earliest first ("first come, first shown"), PKT dates
+  bks.sort((a, b) =>
+    ((a.requestedDate || '') + (a.createdAt || '')).localeCompare((b.requestedDate || '') + (b.createdAt || '')));
 
   if (sf) bks = bks.filter(b => b.status === sf);
   if (tf) bks = bks.filter(b => b.serviceType === tf);
@@ -459,7 +573,12 @@ function renderBookings() {
       ? `${E(b.fromLocation || '—')} → ${E(b.toLocation || '—')}`
       : `${E(b.tourFromDate || '—')} → ${E(b.tourToDate || '—')}`;
 
-    return `<tr>
+    // Completed bookings get a highlighted, more-visible row
+    const rowStyle = b.status === 'completed'
+      ? 'background:rgba(42,157,143,.12);box-shadow:inset 3px 0 0 var(--accent);'
+      : '';
+
+    return `<tr style="${rowStyle}">
       <td class="td-mono" style="font-size:11px;color:var(--text-muted);">${b.id}</td>
       <td class="td-mono" style="font-size:12px;">${b.requestedDate || '—'}</td>
       <td>
@@ -516,15 +635,8 @@ function deleteBooking(id) {
 }
 
 /* ════════════════════════
-   FINANCIAL DUTIES TAB
+   LEGACY DUTY HELPERS (kept for trip edit modal; not shown as a tab)
 ════════════════════════ */
-// Populate vendor filter
-FleetDB.getVendors().forEach(v => {
-  const o = document.createElement('option');
-  o.value = v.id; o.textContent = v.name;
-  document.getElementById('vendorF').appendChild(o);
-});
-
 // Populate edit modal selects
 (function() {
   const vSel = document.getElementById('etVehicle');
@@ -554,6 +666,10 @@ function filterTrips() {
       (d && d.name.toLowerCase().includes(q));
     return matchQ && (!sf || t.status === sf) && (!vf || t.vendorId === vf) && (!df || t.date === df);
   });
+
+  // Sort chronologically — earliest first ("first come, first shown"), PKT dates
+  filtered.sort((a, b) =>
+    ((a.date || '') + (a.createdAt || '') + (a.id || '')).localeCompare((b.date || '') + (b.createdAt || '') + (b.id || '')));
 
   renderTripStats();
   renderTripTable();
@@ -843,10 +959,620 @@ function submitBill() {
   renderBookings();
 }
 
+/* ════════════════════════
+   CUSTOMER INVOICES TAB
+════════════════════════ */
+const PURPOSE_LABEL = {
+  in_city:'IN CITY', out_station:'OUT STATION', corporate:'CORPORATE',
+  airport:'AIRPORT', official:'OFFICIAL', wedding:'WEDDING',
+  protocol:'PROTOCOL', hospital:'HOSPITAL', north_tour:'NORTH TOUR', other:'OTHER'
+};
+
+function renderInvoices() {
+  renderSalesSummary();
+  renderShiftHistory();
+  const q  = (document.getElementById('invSearch').value || '').toLowerCase();
+  const mf = document.getElementById('invMonth').value;
+  const vehicles = FleetDB.getVehicles();
+  const drivers  = FleetDB.getDrivers();
+
+  let bks = FleetDB.getBookings()
+    .filter(b => b.status === 'completed')
+    .sort((a, b) =>
+      ((a.requestedDate || '') + (a.createdAt || '')).localeCompare((b.requestedDate || '') + (b.createdAt || '')));
+
+  if (mf) bks = bks.filter(b => (b.requestedDate || '').startsWith(mf));
+  if (q)  bks = bks.filter(b =>
+    (b.customerName  || '').toLowerCase().includes(q) ||
+    (b.id            || '').toLowerCase().includes(q) ||
+    (b.customerPhone || '').toLowerCase().includes(q)
+  );
+
+  document.getElementById('invCount').textContent = bks.length;
+
+  if (!bks.length) {
+    document.getElementById('invList').innerHTML =
+      '<div style="text-align:center;padding:48px;color:var(--text-muted);">No completed bookings found</div>';
+    return;
+  }
+
+  const E = FleetDB.escapeHtml;
+  document.getElementById('invList').innerHTML = bks.map(b => {
+    const trips = FleetDB.getTrips().filter(t => t.bookingId === b.id);
+    const gross = trips.length
+      ? trips.reduce((s, t) => s + (t.gross || 0), 0)
+      : (parseFloat(b.gross) || 0);
+    const qtys = {};
+    (b.vehicleIds || []).forEach(id => { qtys[id] = (qtys[id] || 0) + 1; });
+    const vehStr = Object.entries(qtys).map(([id, qty]) => {
+      const v = vehicles.find(x => x.id === id);
+      return (qty > 1 ? qty + '× ' : '') + (v ? v.plate : id);
+    }).join(', ');
+    const driverStr = bookingDriverNames(b, trips, vehicles, drivers);
+
+    // Plane-ticket style origin → destination block
+    const isPD   = b.serviceType === 'pick_drop';
+    const fromTxt = isPD ? (b.fromLocation || '—') : (b.tourFromDate || '—');
+    const toTxt   = isPD ? (b.toLocation   || '—') : (b.tourToDate   || '—');
+    const fromLbl = isPD ? 'Pickup'    : 'Start';
+    const toLbl   = isPD ? 'Drop-off'  : 'End';
+
+    return `<div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 20px;margin-bottom:8px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:150px;">
+        <div style="font-size:14px;font-weight:700;">${E(b.customerName || '—')}</div>
+        <div style="font-size:11px;color:var(--text-muted);font-family:var(--mono);">${E(b.customerPhone || '')}</div>
+      </div>
+
+      <!-- Plane-ticket route block -->
+      <div style="flex:2.4;min-width:240px;display:flex;align-items:center;gap:12px;">
+        <div style="text-align:left;min-width:90px;">
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);">${fromLbl}</div>
+          <div style="font-size:13px;font-weight:700;line-height:1.2;">${E(fromTxt)}</div>
+        </div>
+        <div style="flex:1;display:flex;align-items:center;color:var(--accent);min-width:48px;">
+          <div style="flex:1;height:2px;background:repeating-linear-gradient(90deg,var(--accent) 0 4px,transparent 4px 8px);"></div>
+          <span style="font-size:15px;margin:0 2px;">✈</span>
+          <div style="flex:1;height:2px;background:repeating-linear-gradient(90deg,var(--accent) 0 4px,transparent 4px 8px);"></div>
+        </div>
+        <div style="text-align:right;min-width:90px;">
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);">${toLbl}</div>
+          <div style="font-size:13px;font-weight:700;line-height:1.2;">${E(toTxt)}</div>
+        </div>
+      </div>
+
+      <div style="flex:1.4;min-width:170px;font-size:11px;color:var(--text-secondary);line-height:1.7;">
+        <div>🚗 <strong>${E(vehStr || '—')}</strong></div>
+        <div>👤 <strong>${E(driverStr)}</strong></div>
+        <div>🎯 <strong style="color:var(--accent);">${b.purpose ? E(PURPOSE_LABEL[b.purpose] || b.purpose) : '—'}</strong></div>
+        <div style="color:var(--text-muted);">📅 ${b.requestedDate || '—'}</div>
+      </div>
+
+      <div style="text-align:right;min-width:100px;">
+        <div style="font-size:16px;font-weight:700;font-family:var(--mono);color:var(--accent);">${gross ? 'PKR ' + gross.toLocaleString() : '—'}</div>
+        <div style="font-size:10px;color:var(--text-muted);font-family:var(--mono);">${b.id}</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="printCustomerInvoice('${b.id}')">🖨 Print Invoice</button>
+    </div>`;
+  }).join('');
+}
+
+/* Resolve driver name(s) for a booking — prefer the drivers on its duty
+   records, fall back to each vehicle's assigned driver. */
+function bookingDriverNames(b, trips, vehicles, drivers) {
+  const ids = new Set();
+  (b.driverIds || []).forEach(id => { if (id) ids.add(id); });   // driver chosen at booking
+  (trips || []).forEach(t => { if (t.driverId) ids.add(t.driverId); }); // driver on duty record
+  if (ids.size === 0) {                                          // fall back to vehicle's driver
+    (b.vehicleIds || []).forEach(vid => {
+      const v = vehicles.find(x => x.id === vid);
+      if (v && v.driverId) ids.add(v.driverId);
+    });
+  }
+  const names = [...ids]
+    .map(id => { const d = drivers.find(x => x.id === id); return d ? d.name : null; })
+    .filter(Boolean);
+  return names.join(', ') || '—';
+}
+
+/* ════════════════════════
+   SALES SUMMARY + CASH ON HAND (Shift close)
+════════════════════════ */
+function bookingGrossAmt(b, allTrips) {
+  const trips = allTrips.filter(t => t.bookingId === b.id);
+  return trips.length ? trips.reduce((s, t) => s + (t.gross || 0), 0) : (parseFloat(b.gross) || 0);
+}
+
+// Monday of the week containing todayStr (YYYY-MM-DD), as YYYY-MM-DD
+function weekStartStr(todayStr) {
+  const d = new Date(todayStr + 'T00:00:00');
+  const dow = (d.getDay() + 6) % 7;       // Mon = 0
+  d.setDate(d.getDate() - dow);
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+
+let cashExpectedToday = 0;
+
+function renderSalesSummary() {
+  const completed = FleetDB.getBookings().filter(b => b.status === 'completed');
+  const allTrips  = FleetDB.getTrips();
+  const todayStr  = FleetDB.today();
+  const monthStr  = todayStr.slice(0, 7);
+  const wkStart   = weekStartStr(todayStr);
+
+  let dayT = 0, weekT = 0, monthT = 0, allT = 0;
+  completed.forEach(b => {
+    const g = bookingGrossAmt(b, allTrips);
+    const d = b.requestedDate || b.createdAt || '';
+    allT += g;
+    if (d === todayStr) dayT += g;
+    if (d >= wkStart && d <= todayStr) weekT += g;
+    if (d.startsWith(monthStr)) monthT += g;
+  });
+
+  const card = (label, val, sub, accent) => `
+    <div class="card" style="padding:14px 16px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:6px;">${label}</div>
+      <div style="font-size:19px;font-weight:700;font-family:var(--mono);${accent ? 'color:' + accent : ''}">PKR ${val.toLocaleString()}</div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">${sub}</div>
+    </div>`;
+  document.getElementById('salesCards').innerHTML =
+    card("Today's Sales", dayT,   todayStr,            'var(--accent)') +
+    card('This Week',     weekT,  'since ' + wkStart,  '') +
+    card('This Month',    monthT, monthStr,            '') +
+    card('All-Time',      allT,   'total completed',   'var(--emerald)');
+
+  // Expected cash = today's sales + manual cash-in − manual cash-out (today)
+  const todayCash = FleetDB.getCashEntries().filter(c => (c.date || '') === todayStr);
+  const manualIn  = todayCash.filter(c => c.type !== 'out').reduce((s, c) => s + (c.amount || 0), 0);
+  const manualOut = todayCash.filter(c => c.type === 'out').reduce((s, c) => s + (c.amount || 0), 0);
+  cashExpectedToday = dayT + manualIn - manualOut;
+  document.getElementById('cashExpected').textContent = 'PKR ' + cashExpectedToday.toLocaleString();
+}
+
+function renderShiftHistory() {
+  const E = FleetDB.escapeHtml;
+  const shifts = FleetDB.getShiftCloses().slice(0, 12);
+  const box = document.getElementById('shiftHistory');
+  if (!shifts.length) {
+    box.innerHTML = '<div style="padding:18px 20px;font-size:12px;color:var(--text-muted);">No shifts closed yet. Click "Close Shift" at the end of the day to record cash in hand.</div>';
+    return;
+  }
+  box.innerHTML = `<div class="table-wrap" style="margin:0;border:none;"><table>
+    <thead><tr>
+      <th>Closed (PKT)</th><th style="text-align:right;">Expected</th>
+      <th style="text-align:right;">Counted</th><th style="text-align:right;">Over / Short</th>
+      <th>Note</th><th></th>
+    </tr></thead><tbody>` +
+    shifts.map(s => {
+      const color = s.diff === 0 ? 'var(--text-secondary)' : (s.diff > 0 ? 'var(--emerald)' : 'var(--red)');
+      const lbl   = s.diff === 0 ? 'Balanced' : (s.diff > 0 ? '+PKR ' : '−PKR ') + Math.abs(s.diff).toLocaleString();
+      return `<tr>
+        <td style="font-size:12px;">${E(s.closedAt || s.date)}</td>
+        <td class="td-mono" style="text-align:right;font-size:12px;">PKR ${(s.expected || 0).toLocaleString()}</td>
+        <td class="td-mono" style="text-align:right;font-size:12px;font-weight:600;">PKR ${(s.counted || 0).toLocaleString()}</td>
+        <td class="td-mono" style="text-align:right;font-size:12px;font-weight:700;color:${color};">${lbl}</td>
+        <td style="font-size:12px;color:var(--text-secondary);">${E(s.note || '—')}</td>
+        <td style="text-align:right;"><button class="btn btn-sm" style="color:var(--red);" onclick="delShiftClose('${s.id}')">✕</button></td>
+      </tr>`;
+    }).join('') + '</tbody></table></div>';
+}
+
+function openCloseShift() {
+  document.getElementById('csWhen').textContent  = 'Closing for ' + FleetDB.nowPKT();
+  document.getElementById('csExpected').value    = cashExpectedToday;
+  document.getElementById('csCounted').value     = '';
+  document.getElementById('csNote').value        = '';
+  recalcShiftDiff();
+  FleetDB.openModal('closeShiftModal');
+}
+
+function recalcShiftDiff() {
+  const exp = parseFloat(document.getElementById('csExpected').value) || 0;
+  const cnt = parseFloat(document.getElementById('csCounted').value);
+  const el  = document.getElementById('csDiff');
+  if (isNaN(cnt)) { el.textContent = '—'; el.style.color = 'var(--text-muted)'; return; }
+  const diff = cnt - exp;
+  if (diff === 0)      { el.textContent = 'Balanced ✓';                                       el.style.color = 'var(--emerald)'; }
+  else if (diff > 0)   { el.textContent = '+PKR ' + diff.toLocaleString() + ' OVER';          el.style.color = 'var(--emerald)'; }
+  else                 { el.textContent = '−PKR ' + Math.abs(diff).toLocaleString() + ' SHORT'; el.style.color = 'var(--red)'; }
+}
+
+function saveCloseShift() {
+  const exp    = parseFloat(document.getElementById('csExpected').value) || 0;
+  const cntRaw = document.getElementById('csCounted').value;
+  if (cntRaw === '' || isNaN(parseFloat(cntRaw))) { FleetDB.showToast('Enter the cash counted in hand', 'error'); return; }
+  FleetDB.addShiftClose({
+    expected: exp,
+    counted:  parseFloat(cntRaw),
+    note:     document.getElementById('csNote').value.trim(),
+  });
+  FleetDB.closeModal('closeShiftModal');
+  FleetDB.showToast('✓ Shift closed');
+  renderShiftHistory();
+}
+
+function delShiftClose(id) {
+  if (!confirm('Delete this shift-close record?')) return;
+  FleetDB.deleteShiftClose(id);
+  FleetDB.showToast('Record deleted', 'error');
+  renderShiftHistory();
+}
+
+/* ════════════════════════
+   CASHBOOK (all money in & out)
+════════════════════════ */
+// Build a unified list of every money movement across the business
+function buildCashbookEntries() {
+  const allTrips = FleetDB.getTrips();
+  const vendors  = FleetDB.getVendors();
+  const drivers  = FleetDB.getDrivers();
+  const entries  = [];
+
+  // IN — completed bookings (customer invoices)
+  FleetDB.getBookings().filter(b => b.status === 'completed').forEach(b => {
+    const amt = bookingGrossAmt(b, allTrips);
+    if (!amt) return;
+    entries.push({ date: b.requestedDate || b.createdAt || '', dir: 'in', icon: '🟢',
+      kind: 'Invoice', desc: (b.customerName || 'Customer') + ' · ' + b.id, amount: amt, manual: false });
+  });
+
+  // OUT — vendor payouts
+  FleetDB.getPayouts().forEach(p => {
+    const v = vendors.find(x => x.id === p.vendorId);
+    entries.push({ date: p.date || p.createdAt || '', dir: 'out', icon: '🔴',
+      kind: 'Payout', desc: 'Vendor: ' + (v ? v.name : (p.vendorId || '—')) + (p.method ? ' · ' + p.method : ''),
+      amount: p.amount || 0, manual: false });
+  });
+
+  // OUT — driver salaries
+  FleetDB.getSalaryPayments().forEach(s => {
+    const d = drivers.find(x => x.id === s.driverId);
+    entries.push({ date: s.paidDate || s.createdAt || '', dir: 'out', icon: '🔴',
+      kind: 'Salary', desc: 'Salary: ' + (d ? d.name : '—') + (s.month ? ' · ' + s.month : ''),
+      amount: s.amount || 0, manual: false });
+  });
+
+  // OUT — driver advances
+  FleetDB.getAdvances().forEach(a => {
+    const d = drivers.find(x => x.id === a.driverId);
+    entries.push({ date: a.date || a.createdAt || '', dir: 'out', icon: '🔴',
+      kind: 'Advance', desc: 'Advance: ' + (d ? d.name : '—') + (a.reason ? ' · ' + a.reason : ''),
+      amount: a.amount || 0, manual: false });
+  });
+
+  // OUT — expenses
+  FleetDB.getExpenses().forEach(e => {
+    entries.push({ date: e.date || e.createdAt || '', dir: 'out', icon: '🔴',
+      kind: 'Expense', desc: e.description || (FleetDB.EXP_CATS[e.category] || e.category || 'Expense'),
+      amount: e.amount || 0, manual: false });
+  });
+
+  // Manual cash entries (owner-added)
+  FleetDB.getCashEntries().forEach(c => {
+    entries.push({ date: c.date || c.createdAt || '', dir: c.type === 'out' ? 'out' : 'in',
+      icon: c.type === 'out' ? '🔴' : '🟢', kind: c.type === 'out' ? 'Cash Out' : 'Cash In',
+      desc: c.note || 'Manual entry', amount: c.amount || 0, manual: true, srcId: c.id });
+  });
+
+  entries.sort((a, b) => (a.date || '').localeCompare(b.date || '')); // earliest first
+  return entries;
+}
+
+const CB_BADGE = { Invoice:'badge-green','Cash In':'badge-green', Payout:'badge-amber', Salary:'badge-amber', Advance:'badge-amber', Expense:'badge-red','Cash Out':'badge-red' };
+
+function renderCashbook() {
+  const E = FleetDB.escapeHtml;
+  const filter = document.getElementById('cbFilter').value;
+  const mf     = document.getElementById('cbMonth').value;
+  let entries  = buildCashbookEntries();
+  if (mf)     entries = entries.filter(e => (e.date || '').startsWith(mf));
+  if (filter) entries = entries.filter(e => e.dir === filter);
+
+  const totalIn  = entries.filter(e => e.dir === 'in').reduce((s, e) => s + e.amount, 0);
+  const totalOut = entries.filter(e => e.dir === 'out').reduce((s, e) => s + e.amount, 0);
+  const net = totalIn - totalOut;
+
+  document.getElementById('cbCount').textContent = entries.length;
+  const stat = (l, v, c) => `<div class="card" style="padding:14px 16px;">
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:6px;">${l}</div>
+    <div style="font-size:19px;font-weight:700;font-family:var(--mono);${c ? 'color:' + c : ''}">PKR ${v.toLocaleString()}</div>
+  </div>`;
+  document.getElementById('cbStats').innerHTML =
+    stat('Total Money In',  totalIn,  'var(--emerald)') +
+    stat('Total Money Out', totalOut, 'var(--red)') +
+    stat('Net Balance',     net,      net >= 0 ? 'var(--accent)' : 'var(--red)');
+
+  document.getElementById('cbBody').innerHTML = entries.map(e => `<tr>
+    <td class="td-mono" style="font-size:12px;">${E(e.date || '—')}</td>
+    <td><span class="badge ${CB_BADGE[e.kind] || 'badge-muted'}">${e.icon} ${e.kind}</span></td>
+    <td style="font-size:12px;color:var(--text-secondary);">${E(e.desc)}</td>
+    <td class="td-mono" style="text-align:right;font-size:12px;font-weight:700;color:var(--emerald);">${e.dir === 'in' ? 'PKR ' + e.amount.toLocaleString() : ''}</td>
+    <td class="td-mono" style="text-align:right;font-size:12px;font-weight:700;color:var(--red);">${e.dir === 'out' ? 'PKR ' + e.amount.toLocaleString() : ''}</td>
+    <td style="text-align:right;">${e.manual ? `<button class="btn btn-sm" style="color:var(--red);" onclick="delCashEntry('${e.srcId}')">✕</button>` : ''}</td>
+  </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-muted);">No cash movements found</td></tr>';
+}
+
+/* ── Manual cash entry ── */
+function setCashType(t) {
+  document.getElementById('ceType').value = t;
+  document.getElementById('ceInBtn').className  = 'btn ' + (t === 'in'  ? 'btn-primary' : 'btn-secondary');
+  document.getElementById('ceOutBtn').className = 'btn ' + (t === 'out' ? 'btn-primary' : 'btn-secondary');
+}
+function openCashEntry() {
+  setCashType('in');
+  document.getElementById('ceAmount').value = '';
+  document.getElementById('ceNote').value   = '';
+  document.getElementById('ceDate').value   = FleetDB.today();
+  FleetDB.openModal('cashEntryModal');
+}
+function saveCashEntry() {
+  const amt = parseFloat(document.getElementById('ceAmount').value);
+  if (!amt || amt <= 0) { FleetDB.showToast('Enter a valid amount', 'error'); return; }
+  const note = document.getElementById('ceNote').value.trim();
+  if (!note) { FleetDB.showToast('Add a note describing this cash', 'error'); return; }
+  FleetDB.addCashEntry({
+    type:   document.getElementById('ceType').value,
+    amount: amt,
+    date:   document.getElementById('ceDate').value || FleetDB.today(),
+    note,
+  });
+  FleetDB.closeModal('cashEntryModal');
+  FleetDB.showToast('✓ Cash entry added');
+  renderCashbook();
+  renderSalesSummary();   // refresh expected cash on the invoices tab
+}
+function delCashEntry(id) {
+  if (!confirm('Delete this cash entry?')) return;
+  FleetDB.deleteCashEntry(id);
+  FleetDB.showToast('Entry deleted', 'error');
+  renderCashbook();
+  renderSalesSummary();
+}
+
+/* ── Downloadable / printable cashbook ── */
+function downloadCashbook() {
+  const s  = FleetDB.getSettings();
+  const E  = FleetDB.escapeHtml;
+  const filter = document.getElementById('cbFilter').value;
+  const mf     = document.getElementById('cbMonth').value;
+  let entries  = buildCashbookEntries();
+  if (mf)     entries = entries.filter(e => (e.date || '').startsWith(mf));
+  if (filter) entries = entries.filter(e => e.dir === filter);
+
+  const totalIn  = entries.filter(e => e.dir === 'in').reduce((sm, e) => sm + e.amount, 0);
+  const totalOut = entries.filter(e => e.dir === 'out').reduce((sm, e) => sm + e.amount, 0);
+  const net = totalIn - totalOut;
+
+  const bizName = (s.companyName || s.bizName || 'ROYAL MOTORS & RENT A CAR').toUpperCase();
+  const logo    = s.cpLogo || '';
+  const scope   = (mf ? 'Month ' + mf : 'All dates') + (filter ? ' · ' + (filter === 'in' ? 'Money In only' : 'Money Out only') : '');
+
+  const bodyRows = entries.length ? entries.map((e, i) => `
+    <tr>
+      <td class="c">${i + 1}</td>
+      <td class="c">${E(e.date || '—')}</td>
+      <td class="c">${E(e.kind)}</td>
+      <td>${E(e.desc)}</td>
+      <td class="r b" style="color:#0a7d52;">${e.dir === 'in' ? e.amount.toLocaleString() : ''}</td>
+      <td class="r b" style="color:#b3261e;">${e.dir === 'out' ? e.amount.toLocaleString() : ''}</td>
+    </tr>`).join('')
+    : '<tr><td colspan="6" class="c" style="padding:18px;color:#777;">No entries.</td></tr>';
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+<title>Cashbook — ${E(scope)}</title>
+<style>
+  @page{size:A4;margin:12mm 14mm;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#000;}
+  .co-title{font-size:18pt;font-weight:bold;text-align:center;text-decoration:underline;letter-spacing:1px;}
+  .sub{text-align:center;font-size:11pt;font-weight:bold;margin:4px 0 4px;letter-spacing:2px;color:#333;}
+  .scope{text-align:center;font-size:9.5pt;color:#555;margin-bottom:12px;}
+  .summary{display:flex;gap:10px;margin:8px 0 12px;}
+  .summary div{flex:1;border:1px solid #000;padding:6px 8px;text-align:center;}
+  .summary .lbl{font-size:8pt;color:#555;text-transform:uppercase;letter-spacing:.5px;}
+  .summary .val{font-size:12pt;font-weight:bold;}
+  table.rec{border-collapse:collapse;width:100%;}
+  table.rec th,table.rec td{border:1px solid #000;padding:5px 7px;font-size:9pt;vertical-align:top;}
+  table.rec th{background:#ececec;font-weight:bold;text-align:center;}
+  .c{text-align:center;} .r{text-align:right;} .b{font-weight:bold;}
+  tr.total td{background:#f4f4f4;font-weight:bold;font-size:10.5pt;}
+  .footer{border-top:1px solid #000;margin-top:14px;padding-top:6px;font-size:8.5pt;text-align:center;color:#333;}
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style></head><body>
+<table style="width:100%;margin-bottom:4px;"><tr>
+  <td style="width:80px;border:none;vertical-align:middle;">${logo ? `<img src="${logo}" style="width:68px;height:68px;object-fit:contain;"/>` : ''}</td>
+  <td style="border:none;text-align:center;"><div class="co-title">${E(bizName)}</div></td>
+  <td style="width:60px;border:none;"></td>
+</tr></table>
+<div class="sub">CASHBOOK</div>
+<div class="scope">${E(scope)} &nbsp;·&nbsp; Generated ${E(FleetDB.nowPKT())}</div>
+
+<div class="summary">
+  <div><div class="lbl">Total Money In</div><div class="val" style="color:#0a7d52;">PKR ${totalIn.toLocaleString()}</div></div>
+  <div><div class="lbl">Total Money Out</div><div class="val" style="color:#b3261e;">PKR ${totalOut.toLocaleString()}</div></div>
+  <div><div class="lbl">Net Balance</div><div class="val">PKR ${net.toLocaleString()}</div></div>
+</div>
+
+<table class="rec">
+  <tr><th style="width:24px;">#</th><th>Date</th><th>Type</th><th>Description</th><th>Money In</th><th>Money Out</th></tr>
+  ${bodyRows}
+  <tr class="total">
+    <td colspan="4" class="r">TOTALS</td>
+    <td class="r" style="color:#0a7d52;">${totalIn.toLocaleString()}</td>
+    <td class="r" style="color:#b3261e;">${totalOut.toLocaleString()}</td>
+  </tr>
+</table>
+<script>window.onload=()=>{window.print();}<\/script>
+<\/body><\/html>`;
+
+  const win = window.open('', '_blank', 'width=900,height=1000');
+  win.document.write(html);
+  win.document.close();
+}
+
+function printCustomerInvoice(bkId) {
+  const b = FleetDB.getBooking(bkId);
+  if (!b) return;
+  const s        = FleetDB.getSettings();
+  const vehicles = FleetDB.getVehicles();
+  const drivers  = FleetDB.getDrivers();
+
+  const qtys = {};
+  (b.vehicleIds || []).forEach(id => { qtys[id] = (qtys[id] || 0) + 1; });
+  const vehNames = Object.entries(qtys).map(([id, qty]) => {
+    const v = vehicles.find(x => x.id === id);
+    const nm = v ? (v.plate + (v.make ? ' ' + v.make : '') + (v.model ? ' ' + v.model : '')) : id;
+    return (qty > 1 ? qty + '× ' : '') + nm;
+  }).join(', ') || '—';
+
+  const trips = FleetDB.getTrips().filter(t => t.bookingId === bkId);
+  const driverNames = bookingDriverNames(b, trips, vehicles, drivers);
+  const gross = trips.length
+    ? trips.reduce((sm, t) => sm + (t.gross || 0), 0)
+    : (parseFloat(b.gross) || 0);
+
+  const fmtD = d => { if (!d) return '—'; const p = d.split('-'); return p[2]+'-'+p[1]+'-'+p[0].slice(2); };
+  const refNo     = b.id.replace('BK-','') + '/' + (b.requestedDate||'').replace(/-/g,'').slice(4);
+  const bizName   = (s.companyName || s.bizName || 'ROYAL MOTORS & RENT A CAR').toUpperCase();
+  const ntn       = s.cpNtn      || '';
+  const addr      = s.cpAddress  || '';
+  const c1        = s.cpContact1 || '';
+  const c2        = s.cpContact2 || '';
+  const email     = s.cpEmail    || '';
+  const logo      = s.cpLogo     || '';
+  const sig       = s.cpSig      || '';
+  const b1n = s.cpBank1Name||'', b1a = s.cpBank1Acc||'';
+  const b2n = s.cpBank2Name||'', b2a = s.cpBank2Acc||'';
+  const b3n = s.cpBank3Name||'', b3a = s.cpBank3Acc||'';
+  const today     = fmtD(FleetDB.today());
+  const dateFrom  = b.serviceType === 'pick_drop' ? fmtD(b.requestedDate) : fmtD(b.tourFromDate);
+  const dateTo    = b.serviceType === 'pick_drop' ? fmtD(b.requestedDate) : fmtD(b.tourToDate);
+  const fromLoc   = b.fromLocation || '—';
+  const toLoc     = b.toLocation   || '—';
+  const grossFmt  = gross ? 'PKR ' + gross.toLocaleString() + '/-' : '—';
+  // Plane-ticket route: locations for Pick & Drop, dates for Duty/Tour
+  const isPD       = b.serviceType === 'pick_drop';
+  const routeFrom  = isPD ? fromLoc : dateFrom;
+  const routeTo    = isPD ? toLoc   : dateTo;
+  const routeFromL = isPD ? 'PICKUP'   : 'START';
+  const routeToL   = isPD ? 'DROP-OFF' : 'END';
+
+  const bankRows = [b1n||b1a?[b1n,b1a]:null, b2n||b2a?[b2n,b2a]:null, b3n||b3a?[b3n,b3a]:null]
+    .filter(Boolean)
+    .map(([name, acc]) => `<div style="margin-bottom:8px;"><strong>${bizName}</strong><br/>${acc}<br/><em>${name}</em></div>`)
+    .join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+<title>Invoice ${b.id}</title>
+<style>
+  @page{size:A4;margin:12mm 14mm 14mm 14mm;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:Arial,Helvetica,sans-serif;font-size:10.5pt;color:#000;}
+  .co-title{font-size:19pt;font-weight:bold;text-align:center;text-decoration:underline;letter-spacing:1px;}
+  table.main{border-collapse:collapse;width:100%;}
+  table.main td,table.main th{border:1px solid #000;padding:5px 7px;font-size:9.5pt;vertical-align:middle;}
+  table.main th{background:#ececec;font-weight:bold;text-align:center;}
+  .c{text-align:center;} .r{text-align:right;} .b{font-weight:bold;}
+  .bottom{display:flex;gap:20px;margin-top:12px;align-items:flex-start;}
+  .banks{flex:1;font-size:9.5pt;line-height:1.8;}
+  .sig-box{width:160px;text-align:center;}
+  .sig-box img{max-width:140px;max-height:80px;object-fit:contain;}
+  .footer{border-top:1px solid #000;margin-top:10px;padding-top:6px;font-size:8.5pt;text-align:center;color:#333;}
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style></head><body>
+<table style="width:100%;margin-bottom:4px;"><tr>
+  <td style="width:80px;border:none;vertical-align:middle;">
+    ${logo ? `<img src="${logo}" style="width:72px;height:72px;object-fit:contain;"/>` : '<div style="width:72px;height:72px;border:1px solid #ccc;display:flex;align-items:center;justify-content:center;font-size:28pt;">🏢</div>'}
+  </td>
+  <td style="border:none;vertical-align:middle;text-align:center;">
+    <div class="co-title">${bizName}</div>
+  </td>
+  <td style="width:60px;border:none;"></td>
+</tr></table>
+<table style="width:100%;margin:6px 0;font-size:10pt;"><tr>
+  <td style="border:none;"><strong>Date:</strong> ${today}</td>
+  <td style="border:none;text-align:right;"><strong>Ref. No.</strong>${refNo}${ntn ? '<br/><strong>NTN No.:</strong>' + ntn : ''}</td>
+</tr></table>
+<p style="font-weight:bold;font-size:11pt;margin:6px 0 4px;">INVOICE:</p>
+<table class="main">
+  <tr>
+    <th>Vehicle Name</th><th>Driver Name</th>
+    <th>Customer Name</th><th>Fuel &amp; Tolls<br/>Food + Challan</th><th>CONTACT</th>
+  </tr>
+  <tr>
+    <td class="b">${vehNames}</td><td class="c b">${driverNames}</td>
+    <td class="c b">${b.customerName||'—'}</td><td class="c">Customer</td>
+    <td class="c b">${b.customerPhone||'—'}</td>
+  </tr>
+  <tr>
+    <th>Date From</th><th>Date To</th><th>Time From</th><th>Time To</th><th>Purpose</th>
+  </tr>
+  <tr>
+    <td class="c">${dateFrom}</td><td class="c">${dateTo}</td>
+    <td class="c">—</td><td class="c">—</td>
+    <td class="c b">${b.purpose ? (PURPOSE_LABEL[b.purpose] || b.purpose) : '—'}</td>
+  </tr>
+  <tr>
+    <td colspan="5" style="padding:10px 7px;">
+      <table style="width:100%;border:none;border-collapse:collapse;">
+        <tr>
+          <td style="border:none;text-align:right;width:42%;vertical-align:middle;">
+            <div style="font-size:7.5pt;letter-spacing:1px;color:#666;">${routeFromL}</div>
+            <div style="font-size:13pt;font-weight:bold;line-height:1.1;">${routeFrom}</div>
+          </td>
+          <td style="border:none;text-align:center;width:16%;vertical-align:middle;font-size:14pt;color:#000;">
+            · · · ✈ · · ·
+          </td>
+          <td style="border:none;text-align:left;width:42%;vertical-align:middle;">
+            <div style="font-size:7.5pt;letter-spacing:1px;color:#666;">${routeToL}</div>
+            <div style="font-size:13pt;font-weight:bold;line-height:1.1;">${routeTo}</div>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="3" class="c b">Total Amount<br/>W.H.T TAX</td>
+    <td colspan="2" class="c b" style="font-size:12pt;">${grossFmt}</td>
+  </tr>
+  <tr>
+    <td colspan="3" class="c b">Advance</td>
+    <td colspan="2" class="c">—</td>
+  </tr>
+  <tr>
+    <td colspan="3" class="c b">Remaining Amount</td>
+    <td colspan="2" class="c b" style="font-size:12pt;">${grossFmt}</td>
+  </tr>
+</table>
+<p style="margin:8px 0 14px;font-size:10pt;"><strong>Note :</strong> ${b.notes || ''}</p>
+<div class="bottom">
+  <div class="banks">${bankRows || '<em style="color:#999;">No bank accounts configured — add them in Settings.</em>'}</div>
+  <div class="sig-box">
+    ${sig ? `<img src="${sig}"/>` : '<div style="width:140px;height:70px;border-bottom:1px solid #000;"></div>'}
+    <div style="font-size:10pt;margin-top:4px;font-weight:bold;"></div>
+  </div>
+</div>
+<div class="footer">
+  ${addr ? `<strong>ADDRESS:</strong> ${addr}&nbsp;&nbsp;&nbsp;` : ''}
+  ${c1 ? `<strong>Contact No.</strong> ${c1}` : ''}${c2 ? `&nbsp;&nbsp;&nbsp;${c2}` : ''}
+  ${email ? `<br/><strong>Email:</strong> <a href="mailto:${email}">${email}</a>` : ''}
+</div>
+<script>window.onload=()=>{window.print();}<\/script>
+<\/body><\/html>`;
+
+  const win = window.open('', '_blank', 'width=820,height=1000');
+  win.document.write(html);
+  win.document.close();
+}
+
 /* ════ START ════ */
-document.getElementById('bkSearch').oninput   = FleetDB.debounce(() => { bkPage   = 0; renderBookings(); }, 280);
-document.getElementById('tripSearch').oninput = FleetDB.debounce(() => { tripPage = 0; filterTrips();    }, 280);
-showTab('bookings');
+try {
+  document.getElementById('bkSearch').oninput   = FleetDB.debounce(() => { bkPage   = 0; renderBookings(); }, 280);
+  const invEl = document.getElementById('invSearch');
+  if (invEl) invEl.oninput = FleetDB.debounce(() => renderInvoices(), 280);
+} catch(e) { console.error('[trips] init bindings failed:', e); }
+try { showTab('bookings'); } catch(e) { console.error('[trips] init failed:', e); renderBookings(); }
 </script>
 </body>
 </html>

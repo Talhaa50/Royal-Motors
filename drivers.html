@@ -59,6 +59,23 @@
     </div>
     <div class="modal-body">
       <input type="hidden" id="dId"/>
+      <input type="hidden" id="dPhoto"/>
+
+      <!-- Photo upload -->
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+        <div id="dPhotoPreview" style="width:64px;height:64px;border-radius:50%;background:var(--bg-elevated);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;">
+          <span style="font-size:24px;">👤</span>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Driver Photo</div>
+          <label style="cursor:pointer;">
+            <span class="btn btn-secondary btn-sm">📷 Upload Photo</span>
+            <input type="file" id="dPhotoFile" accept="image/*" style="display:none;" onchange="previewDriverPhoto(this)"/>
+          </label>
+          <button class="btn btn-ghost btn-sm" style="margin-left:6px;" onclick="clearDriverPhoto()">Remove</button>
+        </div>
+      </div>
+
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Full Name <span class="required">*</span></label>
@@ -104,6 +121,47 @@
   </div>
 </div>
 
+<!-- Driver Record Modal -->
+<div class="modal-overlay" id="driverRecordModal">
+  <div class="modal" style="max-width:720px;">
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div id="drAvatar" style="width:48px;height:48px;border-radius:50%;background:var(--bg-elevated);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;">
+          <span style="font-size:20px;">👤</span>
+        </div>
+        <div>
+          <div class="modal-title" id="drModalName">Driver Record</div>
+          <div style="font-size:12px;color:var(--text-muted);" id="drModalSub"></div>
+        </div>
+      </div>
+      <button class="icon-btn" onclick="FleetDB.closeModal('driverRecordModal')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:0;">
+      <!-- Driver info strip -->
+      <div id="drInfo" style="padding:14px 20px;background:var(--bg-elevated);border-bottom:1px solid var(--border);display:flex;gap:20px;flex-wrap:wrap;"></div>
+      <!-- Stats row -->
+      <div id="drStats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);"></div>
+      <!-- Notes -->
+      <div id="drNotesBox" style="padding:10px 20px;font-size:12px;color:var(--text-secondary);border-bottom:1px solid var(--border);"></div>
+      <!-- Payment ledger -->
+      <div style="padding:10px 20px 4px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;">Payment History</div>
+      <div class="table-wrap" style="margin:0;border:none;max-height:320px;overflow-y:auto;">
+        <table>
+          <thead><tr>
+            <th>Date</th><th>Type</th><th style="text-align:right;">Amount</th><th>Method / Reason</th><th>Status</th>
+          </tr></thead>
+          <tbody id="drLedger"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="FleetDB.closeModal('driverRecordModal')">Close</button>
+      <button class="btn btn-secondary" onclick="downloadDriverRecord()">⬇ Download Record</button>
+      <a href="salary.html" class="btn btn-primary">Go to Salary</a>
+    </div>
+  </div>
+</div>
+
 <!-- Firebase (cloud sync + auth) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -145,7 +203,7 @@ function renderDrivers() {
     <div style="font-size:20px;font-weight:700;${s}">${v}</div>
   </div>`).join('');
 
-  document.getElementById('dSubtitle').textContent = all.length + ' drivers';
+  document.getElementById('dSubtitle').textContent = all.length + ' drivers · click a row to view full record';
   document.getElementById('rowCount').textContent = all.length;
 
   const display = all.slice(driverPage * PAGE_SIZE, (driverPage + 1) * PAGE_SIZE);
@@ -153,15 +211,18 @@ function renderDrivers() {
     const assignedVehicle = vehicles.find(v => v.driverId === d.id);
     const dTrips = trips.filter(t => t.driverId === d.id);
     const E = FleetDB.escapeHtml;
-    return `<tr>
-      <td style="font-weight:600;font-size:13px;">${E(d.name)}</td>
+    const avatar = d.photo
+      ? `<img src="${d.photo}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0;"/>`
+      : '<span style="width:30px;height:30px;border-radius:50%;background:var(--bg-elevated);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">👤</span>';
+    return `<tr style="cursor:pointer;" onclick="openDriverRecord('${d.id}')">
+      <td><div style="display:flex;align-items:center;gap:9px;"><span style="display:inline-flex;">${avatar}</span><span style="font-weight:600;font-size:13px;">${E(d.name)}</span></div></td>
       <td class="td-mono" style="font-size:12px;">${E(d.phone||'—')}</td>
       <td class="td-mono" style="font-size:12px;">${E(d.cnic||'—')}</td>
       <td style="font-size:13px;font-family:var(--mono);font-weight:600;">${assignedVehicle?E(assignedVehicle.plate):'<span style="color:var(--text-muted);font-family:var(--sans);font-weight:400;">None</span>'}</td>
       <td class="td-amount">${d.salary ? FleetDB.fmtMoney(d.salary) : '—'}</td>
       <td><span class="badge ${d.status==='active'?'badge-green':'badge-muted'}">${E(d.status)}</span></td>
       <td style="text-align:right;" class="td-mono">${dTrips.length}</td>
-      <td><div style="display:flex;gap:5px;"><button class="btn btn-secondary btn-sm" onclick="editDriver('${d.id}')">Edit</button><button class="btn btn-sm" style="color:var(--red);border:1px solid rgba(239,68,68,.2);" onclick="deleteDriverConfirm('${d.id}')">Del</button></div></td>
+      <td onclick="event.stopPropagation()"><div style="display:flex;gap:5px;"><button class="btn btn-secondary btn-sm" onclick="editDriver('${d.id}')">Edit</button><button class="btn btn-sm" style="color:var(--red);border:1px solid rgba(239,68,68,.2);" onclick="deleteDriverConfirm('${d.id}')">Del</button></div></td>
     </tr>`;
   }).join('') || '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-muted);">No drivers found</td></tr>';
   document.getElementById('dPager').innerHTML = FleetDB.pagerHTML(all.length, driverPage, PAGE_SIZE, 'gotoDriverPage');
@@ -178,6 +239,8 @@ function editDriver(id) {
   document.getElementById('dLicense').value = d.license||'';
   document.getElementById('dNotes').value   = d.notes||'';
   document.getElementById('dStatus').value  = d.status||'active';
+  document.getElementById('dPhoto').value   = d.photo||'';
+  setDriverPhotoPreview(d.photo||'');
   document.getElementById('dModalTitle').textContent = 'Edit Driver';
   FleetDB.openModal('driverModal');
 }
@@ -199,6 +262,7 @@ function saveDriver() {
     license: document.getElementById('dLicense').value.trim(),
     notes:   document.getElementById('dNotes').value.trim(),
     status:  document.getElementById('dStatus').value,
+    photo:   document.getElementById('dPhoto').value || null,
   };
   const id = document.getElementById('dId').value;
   if (id) FleetDB.updateDriver(id, data);
@@ -209,9 +273,33 @@ function saveDriver() {
 }
 
 function clearForm() {
-  ['dId','dName','dPhone','dCnic','dSalary','dLicense','dNotes'].forEach(i => document.getElementById(i).value='');
+  ['dId','dName','dPhone','dCnic','dSalary','dLicense','dNotes','dPhoto'].forEach(i => document.getElementById(i).value='');
   document.getElementById('dStatus').value = 'active';
+  clearDriverPhoto();
   document.getElementById('dModalTitle').textContent = 'Add Driver';
+}
+
+/* ── Driver photo upload (base64, like vehicle photos) ── */
+function previewDriverPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('dPhoto').value = e.target.result;
+    setDriverPhotoPreview(e.target.result);
+  };
+  reader.readAsDataURL(file);
+}
+function setDriverPhotoPreview(src) {
+  const el = document.getElementById('dPhotoPreview');
+  el.innerHTML = src
+    ? `<img src="${src}" style="width:100%;height:100%;object-fit:cover;"/>`
+    : '<span style="font-size:24px;">👤</span>';
+}
+function clearDriverPhoto() {
+  document.getElementById('dPhoto').value = '';
+  document.getElementById('dPhotoFile').value = '';
+  setDriverPhotoPreview('');
 }
 
 function deleteDriverConfirm(id) {
@@ -227,6 +315,199 @@ function deleteDriverConfirm(id) {
   FleetDB.deleteDriver(id);
   FleetDB.showToast(`Driver "${d.name}" deleted`, 'error');
   renderDrivers();
+}
+
+/* ════════════════════════
+   DRIVER RECORD (clickable rows)
+════════════════════════ */
+let recordDriverId = null;
+
+// Combined, chronological payment ledger (salary + advances) for a driver
+function driverLedger(driverId) {
+  const sals = FleetDB.getSalaryPayments()
+    .filter(p => p.driverId === driverId)
+    .map(p => ({
+      kind:   'Salary',
+      date:   p.paidDate || p.createdAt || '',
+      amount: p.amount || 0,
+      detail: (p.month ? 'Month ' + p.month : '') + (p.method ? (p.month ? ' · ' : '') + p.method : ''),
+      status: 'paid',
+      notes:  p.notes || '',
+    }));
+  const advs = FleetDB.getAdvances()
+    .filter(a => a.driverId === driverId)
+    .map(a => ({
+      kind:   'Advance',
+      date:   a.date || a.createdAt || '',
+      amount: a.amount || 0,
+      detail: a.reason || '—',
+      status: a.status || 'pending',
+      notes:  a.reason || '',
+    }));
+  return sals.concat(advs).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+}
+
+function openDriverRecord(id) {
+  const d = FleetDB.getDrivers().find(x => x.id === id);
+  if (!d) return;
+  recordDriverId = id;
+  const E = FleetDB.escapeHtml;
+  const vehicle = FleetDB.getVehicles().find(v => v.driverId === id);
+  const trips   = FleetDB.getTrips().filter(t => t.driverId === id && t.status !== 'cancelled');
+  const ledger  = driverLedger(id);
+
+  document.getElementById('drModalName').textContent = d.name;
+  document.getElementById('drModalSub').textContent  = (d.phone || '—') + (d.cnic ? ' · ' + d.cnic : '');
+  document.getElementById('drAvatar').innerHTML = d.photo
+    ? `<img src="${d.photo}" style="width:100%;height:100%;object-fit:cover;"/>`
+    : '<span style="font-size:20px;">👤</span>';
+
+  document.getElementById('drInfo').innerHTML = [
+    ['Phone',          d.phone   || '—'],
+    ['CNIC',           d.cnic    || '—'],
+    ['License',        d.license || '—'],
+    ['Joined',         d.createdAt || '—'],
+    ['Monthly Salary', d.salary ? FleetDB.fmtMoney(d.salary) : '—'],
+    ['Assigned',       vehicle ? vehicle.plate : '—'],
+    ['Status',         d.status || 'active'],
+  ].map(([l,v]) => `<div>
+    <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;">${l}</div>
+    <div style="font-size:13px;font-weight:500;">${E(v)}</div>
+  </div>`).join('');
+
+  const totalSalary  = ledger.filter(r => r.kind === 'Salary').reduce((s, r) => s + r.amount, 0);
+  const totalAdv     = ledger.filter(r => r.kind === 'Advance').reduce((s, r) => s + r.amount, 0);
+  const pendingAdv   = ledger.filter(r => r.kind === 'Advance' && r.status === 'pending').reduce((s, r) => s + r.amount, 0);
+  document.getElementById('drStats').innerHTML = [
+    ['Salary Paid',     'PKR ' + totalSalary.toLocaleString(), 'color:var(--accent)'],
+    ['Total Advances',  'PKR ' + totalAdv.toLocaleString(),    'color:var(--amber)'],
+    ['Pending Advance', 'PKR ' + pendingAdv.toLocaleString(),  pendingAdv ? 'color:var(--red)' : ''],
+    ['Trips',           trips.length,                          'color:var(--emerald)'],
+  ].map(([l,v,s]) => `<div style="padding:12px 16px;background:var(--bg-elevated);">
+    <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;">${l}</div>
+    <div style="font-size:15px;font-weight:700;${s}">${v}</div>
+  </div>`).join('');
+
+  document.getElementById('drNotesBox').innerHTML = d.notes
+    ? '<strong>Notes:</strong> ' + E(d.notes)
+    : '<span style="color:var(--text-muted);">No notes</span>';
+
+  const typeBadge = { Salary: 'badge-teal', Advance: 'badge-amber' };
+  const stBadge   = { paid: 'badge-green', pending: 'badge-amber', settled: 'badge-muted' };
+  document.getElementById('drLedger').innerHTML = ledger.map(r => `<tr>
+    <td class="td-mono" style="font-size:12px;">${E(r.date || '—')}</td>
+    <td><span class="badge ${typeBadge[r.kind] || 'badge-muted'}">${r.kind}</span></td>
+    <td class="td-mono" style="font-size:12px;font-weight:700;text-align:right;color:${r.kind === 'Advance' ? 'var(--amber)' : 'var(--accent)'};">PKR ${r.amount.toLocaleString()}</td>
+    <td style="font-size:12px;color:var(--text-secondary);">${E(r.detail || '—')}</td>
+    <td><span class="badge ${stBadge[r.status] || 'badge-muted'}">${E(r.status)}</span></td>
+  </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted);">No payments or advances recorded yet</td></tr>';
+
+  FleetDB.openModal('driverRecordModal');
+}
+
+/* Downloadable / printable driver record (save as PDF via browser) */
+function downloadDriverRecord() {
+  const d = FleetDB.getDrivers().find(x => x.id === recordDriverId);
+  if (!d) return;
+  const s       = FleetDB.getSettings();
+  const E       = FleetDB.escapeHtml;
+  const vehicle = FleetDB.getVehicles().find(v => v.driverId === recordDriverId);
+  const ledger  = driverLedger(recordDriverId);
+
+  const totalSalary = ledger.filter(r => r.kind === 'Salary').reduce((sm, r) => sm + r.amount, 0);
+  const totalAdv    = ledger.filter(r => r.kind === 'Advance').reduce((sm, r) => sm + r.amount, 0);
+  const pendingAdv  = ledger.filter(r => r.kind === 'Advance' && r.status === 'pending').reduce((sm, r) => sm + r.amount, 0);
+
+  const bizName = (s.companyName || s.bizName || 'ROYAL MOTORS & RENT A CAR').toUpperCase();
+  const logo    = s.cpLogo || '';
+  const addr    = s.cpAddress || '';
+  const c1      = s.cpContact1 || '';
+  const c2      = s.cpContact2 || '';
+  const email   = s.cpEmail || '';
+
+  const bodyRows = ledger.length ? ledger.map((r, i) => `
+    <tr>
+      <td class="c">${i + 1}</td>
+      <td class="c">${E(r.date || '—')}</td>
+      <td class="c b">${r.kind}</td>
+      <td class="r b">${r.amount.toLocaleString()}</td>
+      <td>${E(r.detail || '—')}</td>
+      <td class="c">${E(r.status)}</td>
+    </tr>`).join('')
+    : '<tr><td colspan="6" class="c" style="padding:18px;color:#777;">No payments or advances on record.</td></tr>';
+
+  const infoCell = (l, v) => `<td style="border:none;padding:2px 0;"><span style="color:#666;">${l}:</span> <strong>${E(v || '—')}</strong></td>`;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+<title>Driver Record — ${E(d.name)}</title>
+<style>
+  @page{size:A4;margin:12mm 14mm;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#000;}
+  .co-title{font-size:18pt;font-weight:bold;text-align:center;text-decoration:underline;letter-spacing:1px;}
+  .sub{text-align:center;font-size:11pt;font-weight:bold;margin:4px 0 12px;letter-spacing:2px;color:#333;}
+  table.info{width:100%;font-size:10pt;margin-bottom:6px;}
+  .summary{display:flex;gap:10px;margin:8px 0 12px;}
+  .summary div{flex:1;border:1px solid #000;padding:6px 8px;text-align:center;}
+  .summary .lbl{font-size:8pt;color:#555;text-transform:uppercase;letter-spacing:.5px;}
+  .summary .val{font-size:12pt;font-weight:bold;}
+  table.rec{border-collapse:collapse;width:100%;}
+  table.rec th,table.rec td{border:1px solid #000;padding:5px 7px;font-size:9pt;vertical-align:top;}
+  table.rec th{background:#ececec;font-weight:bold;text-align:center;}
+  .c{text-align:center;} .r{text-align:right;} .b{font-weight:bold;}
+  tr.total td{background:#f4f4f4;font-weight:bold;font-size:10.5pt;}
+  .footer{border-top:1px solid #000;margin-top:14px;padding-top:6px;font-size:8.5pt;text-align:center;color:#333;}
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style></head><body>
+<table style="width:100%;margin-bottom:4px;"><tr>
+  <td style="width:80px;border:none;vertical-align:middle;">
+    ${logo ? `<img src="${logo}" style="width:68px;height:68px;object-fit:contain;"/>` : ''}
+  </td>
+  <td style="border:none;text-align:center;"><div class="co-title">${E(bizName)}</div></td>
+  <td style="width:84px;border:none;text-align:right;">
+    ${d.photo ? `<img src="${d.photo}" style="width:72px;height:84px;object-fit:cover;border:1px solid #000;"/>` : ''}
+  </td>
+</tr></table>
+<div class="sub">DRIVER RECORD</div>
+
+<table class="info">
+  <tr>${infoCell('Name', d.name)}${infoCell('Phone', d.phone)}</tr>
+  <tr>${infoCell('CNIC', d.cnic)}${infoCell('License', d.license)}</tr>
+  <tr>${infoCell('Joined', d.createdAt)}${infoCell('Assigned Vehicle', vehicle ? vehicle.plate : '—')}</tr>
+  <tr>${infoCell('Monthly Salary', d.salary ? 'PKR ' + d.salary.toLocaleString() : '—')}${infoCell('Status', d.status)}</tr>
+  ${d.notes ? `<tr><td colspan="2" style="border:none;padding:2px 0;"><span style="color:#666;">Notes:</span> <strong>${E(d.notes)}</strong></td></tr>` : ''}
+  <tr><td colspan="2" style="border:none;padding:2px 0;"><span style="color:#666;">Record generated:</span> <strong>${E(FleetDB.nowPKT())}</strong></td></tr>
+</table>
+
+<div class="summary">
+  <div><div class="lbl">Total Salary Paid</div><div class="val">PKR ${totalSalary.toLocaleString()}</div></div>
+  <div><div class="lbl">Total Advances</div><div class="val">PKR ${totalAdv.toLocaleString()}</div></div>
+  <div><div class="lbl">Pending Advance</div><div class="val">PKR ${pendingAdv.toLocaleString()}</div></div>
+</div>
+
+<table class="rec">
+  <tr>
+    <th style="width:24px;">#</th><th>Date</th><th>Type</th><th>Amount (PKR)</th><th>Method / Reason</th><th>Status</th>
+  </tr>
+  ${bodyRows}
+  <tr class="total">
+    <td colspan="3" class="r">Total Paid Out</td>
+    <td class="r">${(totalSalary + totalAdv).toLocaleString()}</td>
+    <td colspan="2"></td>
+  </tr>
+</table>
+
+<div class="footer">
+  ${addr ? `<strong>ADDRESS:</strong> ${E(addr)}&nbsp;&nbsp;&nbsp;` : ''}
+  ${c1 ? `<strong>Contact:</strong> ${E(c1)}` : ''}${c2 ? `&nbsp;&nbsp;${E(c2)}` : ''}
+  ${email ? `<br/><strong>Email:</strong> ${E(email)}` : ''}
+</div>
+<script>window.onload=()=>{window.print();}<\/script>
+<\/body><\/html>`;
+
+  const win = window.open('', '_blank', 'width=900,height=1000');
+  win.document.write(html);
+  win.document.close();
 }
 
 document.getElementById('dSearch').oninput = FleetDB.debounce(() => { driverPage = 0; renderDrivers(); }, 280);

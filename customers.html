@@ -127,10 +127,10 @@
       <!-- Stats row -->
       <div id="histStats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);"></div>
       <!-- History table -->
-      <div class="table-wrap" style="margin:0;border:none;max-height:340px;overflow-y:auto;">
+      <div class="table-wrap" style="margin:0;border:none;max-height:360px;overflow-y:auto;">
         <table>
           <thead><tr>
-            <th>Booking ID</th><th>Date</th><th>Type</th><th>Details</th><th>Vehicles</th><th>Status</th>
+            <th>Date</th><th>Type</th><th>Route</th><th>Driver</th><th>Vehicle</th><th style="text-align:right;">Amount</th><th>Status</th>
           </tr></thead>
           <tbody id="histBody"></tbody>
         </table>
@@ -138,6 +138,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="FleetDB.closeModal('historyModal')">Close</button>
+      <button class="btn btn-secondary" onclick="downloadCustomerRecord()">⬇ Download Record</button>
       <a href="dispatch.html" class="btn btn-primary">+ New Booking</a>
     </div>
   </div>
@@ -289,18 +290,64 @@ function removeCustomer(id) {
 }
 
 /* ── Booking History ── */
+let histCustomerId = null;
+
+// Resolve { date, type, route, driverStr, vehStr, amount, status } for a booking
+function bookingRecordRow(b, allTrips, vehicles, drivers) {
+  const trips  = allTrips.filter(t => t.bookingId === b.id);
+  const amount = trips.length
+    ? trips.reduce((s, t) => s + (t.gross || 0), 0)
+    : (parseFloat(b.gross) || 0);
+
+  const ids = new Set();
+  (b.driverIds || []).forEach(id => { if (id) ids.add(id); });
+  trips.forEach(t => { if (t.driverId) ids.add(t.driverId); });
+  if (ids.size === 0) {
+    (b.vehicleIds || []).forEach(vid => {
+      const v = vehicles.find(x => x.id === vid);
+      if (v && v.driverId) ids.add(v.driverId);
+    });
+  }
+  const driverStr = [...ids]
+    .map(id => { const d = drivers.find(x => x.id === id); return d ? d.name : null; })
+    .filter(Boolean).join(', ') || '—';
+
+  const vehStr = (b.vehicleIds || []).map(vid => {
+    const v = vehicles.find(x => x.id === vid);
+    return v ? v.plate : '?';
+  }).join(', ') || '—';
+
+  const route = b.serviceType === 'pick_drop'
+    ? `${b.fromLocation || '—'} → ${b.toLocation || '—'}`
+    : `${b.tourFromDate || '—'} → ${b.tourToDate || '—'}`;
+
+  return {
+    date:   b.requestedDate || b.createdAt || '—',
+    type:   b.serviceType === 'pick_drop' ? 'Pick & Drop' : 'Duty / Tour',
+    route, driverStr, vehStr, amount, status: b.status || '—',
+  };
+}
+
 function openHistory(customerId) {
   const c = FleetDB.getCustomer(customerId);
   if (!c) return;
-  const bookings = FleetDB.getCustomerBookingHistory(customerId);
+  histCustomerId = customerId;
+
+  // Earliest first — chronological record
+  const bookings = FleetDB.getCustomerBookingHistory(customerId)
+    .slice()
+    .sort((a, b) => ((a.requestedDate || '') + (a.createdAt || '')).localeCompare((b.requestedDate || '') + (b.createdAt || '')));
   const vehicles = FleetDB.getVehicles();
+  const drivers  = FleetDB.getDrivers();
+  const allTrips = FleetDB.getTrips();
 
   document.getElementById('histModalName').textContent = c.name;
-  document.getElementById('histModalSub').textContent  = c.phone + (c.cnic ? ' · ' + c.cnic : '');
+  document.getElementById('histModalSub').textContent  = (c.phone || '—') + (c.cnic ? ' · ' + c.cnic : '');
 
   const E = FleetDB.escapeHtml;
   document.getElementById('histCustInfo').innerHTML = [
-    ['Route',   c.route   || '—'],
+    ['Phone',   c.phone   || '—'],
+    ['CNIC',    c.cnic    || '—'],
     ['Address', c.address || '—'],
     ['Since',   c.createdAt || '—'],
     ['Status',  c.status  || 'active'],
@@ -309,42 +356,135 @@ function openHistory(customerId) {
     <div style="font-size:13px;font-weight:500;">${E(v)}</div>
   </div>`).join('');
 
-  const pdCount   = bookings.filter(b => b.serviceType === 'pick_drop').length;
-  const tourCount = bookings.filter(b => b.serviceType === 'tour').length;
-  const lastDate  = bookings.length ? bookings[0].requestedDate : '—';
+  const rows = bookings.map(b => bookingRecordRow(b, allTrips, vehicles, drivers));
+  const totalSpent = rows.reduce((s, r) => s + r.amount, 0);
+  const pdCount    = bookings.filter(b => b.serviceType === 'pick_drop').length;
+  const tourCount  = bookings.filter(b => b.serviceType === 'tour').length;
+
   document.getElementById('histStats').innerHTML = [
-    ['Total Bookings', bookings.length,  ''],
-    ['Pick & Drop',    pdCount,          'color:var(--accent)'],
-    ['Tours',          tourCount,        'color:var(--emerald)'],
-    ['Last Booking',   lastDate,         ''],
+    ['Total Bookings', bookings.length,                       ''],
+    ['Total Spent',    'PKR ' + totalSpent.toLocaleString(),  'color:var(--accent)'],
+    ['Pick & Drop',    pdCount,                                ''],
+    ['Tours / Duty',   tourCount,                              'color:var(--emerald)'],
   ].map(([l,v,s]) => `<div style="padding:12px 16px;background:var(--bg-elevated);">
     <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;">${l}</div>
     <div style="font-size:16px;font-weight:700;${s}">${v}</div>
   </div>`).join('');
 
-  const stBadge = { confirmed:'badge-green', hold:'badge-amber', pending:'badge-amber', cancelled:'badge-red', completed:'badge-green' };
-  document.getElementById('histBody').innerHTML = bookings.map(b => {
-    const vPlates = (b.vehicleIds || []).map(vid => {
-      const v = vehicles.find(x => x.id === vid);
-      return v ? E(v.plate) : '?';
-    }).join(', ') || '—';
-
-    const typeLabel = b.serviceType === 'pick_drop' ? '🚗 Pick&Drop' : '🗺 Tour';
-    const detail    = b.serviceType === 'pick_drop'
-      ? `${E(b.fromLocation || '?')} → ${E(b.toLocation || '?')}`
-      : `${E(b.tourFromDate || '?')} → ${E(b.tourToDate || '?')}`;
-
-    return `<tr>
-      <td class="td-mono" style="font-size:11px;color:var(--text-muted);">${b.id}</td>
-      <td class="td-mono" style="font-size:12px;">${b.requestedDate}</td>
-      <td style="font-size:12px;">${typeLabel}</td>
-      <td style="font-size:12px;color:var(--text-secondary);">${detail}</td>
-      <td class="td-mono" style="font-size:11px;font-weight:600;">${vPlates}</td>
+  const stBadge = { confirmed:'badge-green', hold:'badge-amber', pending:'badge-amber', cancelled:'badge-red', completed:'badge-teal' };
+  document.getElementById('histBody').innerHTML = rows.map((r, i) => {
+    const b = bookings[i];
+    const rowStyle = b.status === 'completed'
+      ? 'background:rgba(42,157,143,.10);box-shadow:inset 3px 0 0 var(--accent);' : '';
+    return `<tr style="${rowStyle}">
+      <td class="td-mono" style="font-size:12px;">${r.date}</td>
+      <td style="font-size:12px;">${r.type === 'Pick & Drop' ? '🚗' : '🗺'} ${r.type}</td>
+      <td style="font-size:12px;color:var(--text-secondary);">${E(r.route)}</td>
+      <td style="font-size:12px;">${E(r.driverStr)}</td>
+      <td class="td-mono" style="font-size:11px;font-weight:600;">${E(r.vehStr)}</td>
+      <td class="td-mono" style="font-size:12px;font-weight:700;text-align:right;color:var(--accent);">${r.amount ? 'PKR ' + r.amount.toLocaleString() : '—'}</td>
       <td><span class="badge ${stBadge[b.status] || 'badge-muted'}">${E(b.status)}</span></td>
     </tr>`;
-  }).join('') || '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted);">No bookings yet for this customer</td></tr>';
+  }).join('') || '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-muted);">No bookings yet for this customer</td></tr>';
 
   FleetDB.openModal('historyModal');
+}
+
+/* ── Downloadable / printable customer record (save as PDF via browser) ── */
+function downloadCustomerRecord() {
+  const c = FleetDB.getCustomer(histCustomerId);
+  if (!c) return;
+  const s        = FleetDB.getSettings();
+  const vehicles = FleetDB.getVehicles();
+  const drivers  = FleetDB.getDrivers();
+  const allTrips = FleetDB.getTrips();
+  const E        = FleetDB.escapeHtml;
+
+  const bookings = FleetDB.getCustomerBookingHistory(histCustomerId)
+    .slice()
+    .sort((a, b) => ((a.requestedDate || '') + (a.createdAt || '')).localeCompare((b.requestedDate || '') + (b.createdAt || '')));
+  const rows = bookings.map(b => bookingRecordRow(b, allTrips, vehicles, drivers));
+  const totalSpent = rows.reduce((sm, r) => sm + r.amount, 0);
+
+  const bizName = (s.companyName || s.bizName || 'ROYAL MOTORS & RENT A CAR').toUpperCase();
+  const logo    = s.cpLogo || '';
+  const addr    = s.cpAddress || '';
+  const c1      = s.cpContact1 || '';
+  const c2      = s.cpContact2 || '';
+  const email   = s.cpEmail || '';
+
+  const bodyRows = rows.length ? rows.map((r, i) => `
+    <tr>
+      <td class="c">${i + 1}</td>
+      <td class="c">${E(r.date)}</td>
+      <td class="c">${E(r.type)}</td>
+      <td>${E(r.route)}</td>
+      <td>${E(r.driverStr)}</td>
+      <td class="c">${E(r.vehStr)}</td>
+      <td class="r b">${r.amount ? r.amount.toLocaleString() : '—'}</td>
+      <td class="c">${E(r.status)}</td>
+    </tr>`).join('')
+    : '<tr><td colspan="8" class="c" style="padding:18px;color:#777;">No bookings on record.</td></tr>';
+
+  const infoCell = (l, v) => `<td style="border:none;padding:2px 0;"><span style="color:#666;">${l}:</span> <strong>${E(v || '—')}</strong></td>`;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+<title>Customer Record — ${E(c.name)}</title>
+<style>
+  @page{size:A4;margin:12mm 14mm;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#000;}
+  .co-title{font-size:18pt;font-weight:bold;text-align:center;text-decoration:underline;letter-spacing:1px;}
+  .sub{text-align:center;font-size:11pt;font-weight:bold;margin:4px 0 12px;letter-spacing:2px;color:#333;}
+  table.info{width:100%;font-size:10pt;margin-bottom:10px;}
+  table.rec{border-collapse:collapse;width:100%;}
+  table.rec th,table.rec td{border:1px solid #000;padding:5px 7px;font-size:9pt;vertical-align:top;}
+  table.rec th{background:#ececec;font-weight:bold;text-align:center;}
+  .c{text-align:center;} .r{text-align:right;} .b{font-weight:bold;}
+  tr.total td{background:#f4f4f4;font-weight:bold;font-size:10.5pt;}
+  .footer{border-top:1px solid #000;margin-top:14px;padding-top:6px;font-size:8.5pt;text-align:center;color:#333;}
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style></head><body>
+<table style="width:100%;margin-bottom:4px;"><tr>
+  <td style="width:80px;border:none;vertical-align:middle;">
+    ${logo ? `<img src="${logo}" style="width:68px;height:68px;object-fit:contain;"/>` : ''}
+  </td>
+  <td style="border:none;text-align:center;"><div class="co-title">${E(bizName)}</div></td>
+  <td style="width:60px;border:none;"></td>
+</tr></table>
+<div class="sub">CUSTOMER RECORD</div>
+
+<table class="info">
+  <tr>${infoCell('Name', c.name)}${infoCell('Phone', c.phone)}</tr>
+  <tr>${infoCell('CNIC', c.cnic)}${infoCell('Customer Since', c.createdAt)}</tr>
+  <tr>${infoCell('Address', c.address)}${infoCell('Status', c.status)}</tr>
+  <tr><td style="border:none;padding:2px 0;"><span style="color:#666;">Record generated:</span> <strong>${E(FleetDB.nowPKT())}</strong></td><td style="border:none;"></td></tr>
+</table>
+
+<table class="rec">
+  <tr>
+    <th style="width:24px;">#</th><th>Date</th><th>Type</th><th>Route / Dates</th>
+    <th>Driver</th><th>Vehicle</th><th>Amount (PKR)</th><th>Status</th>
+  </tr>
+  ${bodyRows}
+  <tr class="total">
+    <td colspan="6" class="r">Total Bookings: ${rows.length}&nbsp;&nbsp;|&nbsp;&nbsp;Total Amount</td>
+    <td class="r">${totalSpent.toLocaleString()}</td>
+    <td></td>
+  </tr>
+</table>
+
+<div class="footer">
+  ${addr ? `<strong>ADDRESS:</strong> ${E(addr)}&nbsp;&nbsp;&nbsp;` : ''}
+  ${c1 ? `<strong>Contact:</strong> ${E(c1)}` : ''}${c2 ? `&nbsp;&nbsp;${E(c2)}` : ''}
+  ${email ? `<br/><strong>Email:</strong> ${E(email)}` : ''}
+</div>
+<script>window.onload=()=>{window.print();}<\/script>
+<\/body><\/html>`;
+
+  const win = window.open('', '_blank', 'width=900,height=1000');
+  win.document.write(html);
+  win.document.close();
 }
 
 document.getElementById('custSearch').oninput = FleetDB.debounce(() => { custPage = 0; renderList(); }, 280);

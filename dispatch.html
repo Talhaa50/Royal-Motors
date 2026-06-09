@@ -31,6 +31,8 @@
     [data-theme="dark"] .flatpickr-calendar { background:#1e2d3d!important; }
     [data-theme="dark"] .flatpickr-day { color:#e2e8f0!important; }
     [data-theme="dark"] .flatpickr-day.flatpickr-disabled { color:#4a5568!important; }
+    #bkGross::-webkit-outer-spin-button,#bkGross::-webkit-inner-spin-button,
+    #bkComm::-webkit-outer-spin-button, #bkComm::-webkit-inner-spin-button  { -webkit-appearance:none;margin:0; }
   </style>
   <style>
     /* Vehicle cards */
@@ -69,6 +71,21 @@
     .vc-qty-btn:hover { opacity:.85; }
     .vc-qty-num { font-size:14px;font-weight:700;color:var(--accent);min-width:20px;text-align:center; }
     .veh-grid  { display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px; }
+
+    /* Purpose cards */
+    .purpose-grid { display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:8px; }
+    @media(max-width:640px){ .purpose-grid{ grid-template-columns:repeat(3,1fr); } }
+    .purpose-card {
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:5px;padding:10px 6px;border-radius:var(--r-md);cursor:pointer;
+      border:2px solid var(--border);background:var(--bg-elevated);
+      transition:border-color .15s,background .15s;text-align:center;
+    }
+    .purpose-card:hover { border-color:var(--border-mid);background:var(--bg-hover); }
+    .purpose-card.sel   { border-color:var(--accent);background:var(--accent)18; }
+    .pc-icon { font-size:22px;line-height:1; }
+    .pc-lbl  { font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);line-height:1.2; }
+    .purpose-card.sel .pc-lbl { color:var(--accent); }
 
     /* Category label */
     .cat-lbl {
@@ -143,15 +160,15 @@
               <label class="form-label">Booking Type <span class="required">*</span></label>
               <div style="display:flex;gap:10px;">
                 <button class="btn btn-secondary" id="btnTour" onclick="setSvc('tour')"
-                        style="flex:1;padding:11px;font-size:14px;">🗺 Tour</button>
+                        style="flex:1;padding:11px;font-size:14px;">🌍 Duty</button>
                 <button class="btn btn-secondary" id="btnPD"   onclick="setSvc('pick_drop')"
-                        style="flex:1;padding:11px;font-size:14px;">🚗 Pick &amp; Drop</button>
+                        style="flex:1;padding:11px;font-size:14px;">🛞 Pick &amp; Drop</button>
               </div>
             </div>
 
-            <!-- Pick & Drop -->
+            <!-- Pick & Drop date + route -->
             <div id="pdFields">
-              <div class="form-row">
+              <div class="form-row" style="margin-top:12px;">
                 <div class="form-group">
                   <label class="form-label">From <span class="required">*</span></label>
                   <input type="text" class="form-input" id="fromLoc" placeholder="Pickup location"/>
@@ -161,25 +178,54 @@
                   <input type="text" class="form-input" id="toLoc" placeholder="Drop-off location"/>
                 </div>
               </div>
-              <div class="form-group" style="max-width:240px;">
-                <label class="form-label">Date <span class="required">*</span></label>
-                <input type="text" class="form-input" id="pdDate" placeholder="Pick a date" readonly style="cursor:pointer;"/>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Date <span class="required">*</span></label>
+                  <input type="text" class="form-input" id="pdDate" placeholder="Pick a date" readonly style="cursor:pointer;"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Driver (optional)</label>
+                  <select class="form-select" id="pdDriver">
+                    <option value="">— No preference —</option>
+                  </select>
+                </div>
               </div>
             </div>
 
-            <!-- Tour -->
+            <!-- Duty dates -->
             <div id="tourFields" style="display:none;">
-              <div class="form-group">
-                <label class="form-label">Tour Dates <span class="required">*</span></label>
-                <input type="text" class="form-input" id="tourDateRange" placeholder="Select start → end date" readonly style="cursor:pointer;"/>
-                <input type="hidden" id="tourFrom"/>
-                <input type="hidden" id="tourTo"/>
+              <div class="form-row" style="margin-top:12px;">
+                <div class="form-group">
+                  <label class="form-label">Start Date <span class="required">*</span></label>
+                  <input type="text" class="form-input" id="tourFrom" placeholder="Start date" readonly style="cursor:pointer;"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">End Date <span class="required">*</span></label>
+                  <input type="text" class="form-input" id="tourTo" placeholder="End date" readonly style="cursor:pointer;"/>
+                </div>
               </div>
               <div class="form-group" style="max-width:280px;">
                 <label class="form-label">Driver (optional)</label>
                 <select class="form-select" id="tourDriver">
                   <option value="">— No preference —</option>
                 </select>
+              </div>
+            </div>
+
+            <!-- Purpose cards -->
+            <div style="margin-top:16px;">
+              <label class="form-label">Purpose</label>
+              <div class="purpose-grid" id="purposeGrid">
+                <div class="purpose-card" data-val="in_city"      onclick="setPurpose('in_city')">      <span class="pc-icon">🏙️</span><span class="pc-lbl">IN CITY</span></div>
+                <div class="purpose-card" data-val="out_station"  onclick="setPurpose('out_station')">  <span class="pc-icon">🛣️</span><span class="pc-lbl">OUT STATION</span></div>
+                <div class="purpose-card" data-val="corporate"    onclick="setPurpose('corporate')">    <span class="pc-icon">🏢</span><span class="pc-lbl">CORPORATE</span></div>
+                <div class="purpose-card" data-val="airport"      onclick="setPurpose('airport')">      <span class="pc-icon">✈️</span><span class="pc-lbl">AIRPORT</span></div>
+                <div class="purpose-card" data-val="official"     onclick="setPurpose('official')">     <span class="pc-icon">📋</span><span class="pc-lbl">OFFICIAL</span></div>
+                <div class="purpose-card" data-val="wedding"      onclick="setPurpose('wedding')">      <span class="pc-icon">💒</span><span class="pc-lbl">WEDDING</span></div>
+                <div class="purpose-card" data-val="protocol"     onclick="setPurpose('protocol')">     <span class="pc-icon">🎖️</span><span class="pc-lbl">PROTOCOL</span></div>
+                <div class="purpose-card" data-val="hospital"     onclick="setPurpose('hospital')">     <span class="pc-icon">🏥</span><span class="pc-lbl">HOSPITAL</span></div>
+                <div class="purpose-card" data-val="north_tour"   onclick="setPurpose('north_tour')">   <span class="pc-icon">🏔️</span><span class="pc-lbl">NORTH TOUR</span></div>
+                <div class="purpose-card" data-val="other"        onclick="setPurpose('other')">        <span class="pc-icon">📝</span><span class="pc-lbl">OTHER</span></div>
               </div>
             </div>
 
@@ -277,19 +323,35 @@
                 <div class="form-row">
                   <div class="form-group" style="margin:0;">
                     <label class="form-label">Gross</label>
-                    <div class="input-group">
-                      <span class="input-prefix">₨</span>
-                      <input type="number" class="form-input" id="bkGross" placeholder="0" min="0"/>
+                    <div style="display:flex;align-items:stretch;border:1px solid var(--border-mid);border-radius:var(--r-sm);overflow:hidden;background:var(--bg-input);">
+                      <span style="padding:0 8px;display:flex;align-items:center;color:var(--text-muted);font-size:13px;border-right:1px solid var(--border);">₨</span>
+                      <input type="number" class="form-input" id="bkGross" placeholder="0" min="0"
+                             style="border:none;border-radius:0;flex:1;-moz-appearance:textfield;appearance:textfield;"/>
+                      <div style="display:flex;flex-direction:column;border-left:1px solid var(--border);">
+                        <button type="button" onclick="stepVal('bkGross',5000)"
+                          style="flex:1;padding:0 10px;background:var(--bg-elevated);border:none;border-bottom:1px solid var(--border);cursor:pointer;color:var(--accent);font-size:11px;font-weight:700;line-height:1;">▲</button>
+                        <button type="button" onclick="stepVal('bkGross',-1000)"
+                          style="flex:1;padding:0 10px;background:var(--bg-elevated);border:none;cursor:pointer;color:var(--red);font-size:11px;font-weight:700;line-height:1;">▼</button>
+                      </div>
                     </div>
+                    <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">▲ +5,000 &nbsp;·&nbsp; ▼ −1,000</div>
                   </div>
                   <div class="form-group" style="margin:0;">
                     <label class="form-label">Commission
                       <span style="font-size:10px;color:var(--text-muted);font-weight:400;">(opt.)</span>
                     </label>
-                    <div class="input-group">
-                      <span class="input-prefix">₨</span>
-                      <input type="number" class="form-input" id="bkComm" placeholder="0" min="0"/>
+                    <div style="display:flex;align-items:stretch;border:1px solid var(--border-mid);border-radius:var(--r-sm);overflow:hidden;background:var(--bg-input);">
+                      <span style="padding:0 8px;display:flex;align-items:center;color:var(--text-muted);font-size:13px;border-right:1px solid var(--border);">₨</span>
+                      <input type="number" class="form-input" id="bkComm" placeholder="0" min="0"
+                             style="border:none;border-radius:0;flex:1;-moz-appearance:textfield;appearance:textfield;"/>
+                      <div style="display:flex;flex-direction:column;border-left:1px solid var(--border);">
+                        <button type="button" onclick="stepVal('bkComm',1000)"
+                          style="flex:1;padding:0 10px;background:var(--bg-elevated);border:none;border-bottom:1px solid var(--border);cursor:pointer;color:var(--accent);font-size:11px;font-weight:700;line-height:1;">▲</button>
+                        <button type="button" onclick="stepVal('bkComm',-1000)"
+                          style="flex:1;padding:0 10px;background:var(--bg-elevated);border:none;cursor:pointer;color:var(--red);font-size:11px;font-weight:700;line-height:1;">▼</button>
+                      </div>
                     </div>
+                    <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">▲▼ ±1,000</div>
                   </div>
                 </div>
               </div>
@@ -323,8 +385,16 @@ FleetDB.init('dispatch.html');
 /* ═══════════════════════ STATE ═══════════════════════ */
 let curCust = null;
 let selVehs = {};   // { vehicleId: quantity }  e.g. { 'vh2': 2, 'vh5': 1 }
-let svcType = 'tour';
-let pdPicker, tourRangePicker;
+let svcType    = 'tour';
+let selPurpose = '';
+let pdPicker, tourFromPicker, tourToPicker;
+
+function setPurpose(val) {
+  selPurpose = val;
+  document.querySelectorAll('.purpose-card').forEach(c => {
+    c.classList.toggle('sel', c.dataset.val === val);
+  });
+}
 
 /* ═══════════════════════ VEHICLE CATEGORY MAPS ═══════ */
 const CAT_LABELS = { luxury:'💎 Luxury', deluxe:'⭐ Deluxe', standard:'🚗 Standard' };
@@ -337,17 +407,12 @@ pdPicker = flatpickr('#pdDate', {
   dateFormat: 'Y-m-d',
   defaultDate: 'today',
   allowInput: false,
+  clickOpens: true,
+  static: true,
 });
 
-tourRangePicker = flatpickr('#tourDateRange', {
-  mode: 'range',
-  dateFormat: 'Y-m-d',
-  allowInput: false,
-  onChange(selectedDates) {
-    document.getElementById('tourFrom').value = selectedDates[0] ? fmtDate(selectedDates[0]) : '';
-    document.getElementById('tourTo').value   = selectedDates[1] ? fmtDate(selectedDates[1]) : '';
-  },
-});
+tourFromPicker = flatpickr('#tourFrom', { dateFormat: 'Y-m-d', defaultDate: 'today', allowInput: false, clickOpens: true, static: true });
+tourToPicker   = flatpickr('#tourTo',   { dateFormat: 'Y-m-d', defaultDate: 'today', allowInput: false, clickOpens: true, static: true });
 
 /* ═══════════════════════ INIT ════════════════════════ */
 populateTourDrivers();
@@ -412,9 +477,13 @@ function renderVehicles() {
       const warn   = v.status === 'maintenance' ? '<div class="vc-warn">MAINTENANCE</div>'
                    : v.status === 'on_trip'     ? '<div class="vc-warn">ON TRIP</div>'
                    : v.status === 'inactive'    ? '<div class="vc-warn">INACTIVE</div>' : '';
+      const thumb = v.photo
+        ? `<div style="width:100%;height:54px;border-radius:6px;overflow:hidden;margin-bottom:6px;"><img src="${v.photo}" style="width:100%;height:100%;object-fit:cover;"/></div>`
+        : `<div style="width:100%;height:54px;border-radius:6px;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;margin-bottom:6px;font-size:24px;">🚗</div>`;
       html += `
         <div id="vc_${v.id}" class="veh-card${isSel ? ' sel' : ''}"
              onclick="selectVeh('${v.id}')">
+          ${thumb}
           <div class="vc-chk">${qty}</div>
           <div class="vc-name">${vehicleDisplayName(v)}</div>
           <div class="vc-plate">${FleetDB.escapeHtml(v.plate)}</div>
@@ -476,11 +545,14 @@ function updateSelBadge() {
 
 /* ═══════════════════════ TOUR DRIVER ════════════════ */
 function populateTourDrivers() {
-  const sel = document.getElementById('tourDriver');
-  FleetDB.getDrivers().forEach(d => {
-    const o = document.createElement('option');
-    o.value = d.id; o.textContent = d.name;
-    sel.appendChild(o);
+  ['tourDriver', 'pdDriver'].forEach(selId => {
+    const sel = document.getElementById(selId);
+    if (!sel) return;
+    FleetDB.getDrivers().forEach(d => {
+      const o = document.createElement('option');
+      o.value = d.id; o.textContent = d.name;
+      sel.appendChild(o);
+    });
   });
 }
 
@@ -673,7 +745,7 @@ function renderHoldQueue() {
               <span style="font-size:13px;font-weight:600;">${FleetDB.escapeHtml(b.customerName || '?')}</span>
               <span style="font-size:11px;color:var(--text-muted);margin-left:8px;">${FleetDB.escapeHtml(b.customerPhone || '')}</span>
               <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">
-                · ${b.serviceType === 'pick_drop' ? '🚗 Pick&Drop' : '🗺 Tour'} · ${b.requestedDate}
+                · ${b.serviceType === 'pick_drop' ? '🚗 Pick&Drop' : '🌍 Duty'} · ${b.requestedDate}
               </span>
             </div>
             <button class="btn btn-secondary btn-sm" onclick="resumeHold('${b.id}')"
@@ -695,12 +767,12 @@ function resumeHold(id) {
   document.getElementById('fromLoc').value  = b.fromLocation || '';
   document.getElementById('toLoc').value    = b.toLocation   || '';
   pdPicker.setDate(b.requestedDate || FleetDB.today());
-  if (b.tourFromDate && b.tourToDate) {
-    tourRangePicker.setDate([b.tourFromDate, b.tourToDate]);
-    document.getElementById('tourFrom').value = b.tourFromDate;
-    document.getElementById('tourTo').value   = b.tourToDate;
-  }
-  document.getElementById('tourDriver').value = (b.driverIds && b.driverIds[0]) ? b.driverIds[0] : '';
+  if (b.tourFromDate) tourFromPicker.setDate(b.tourFromDate);
+  if (b.tourToDate)   tourToPicker.setDate(b.tourToDate);
+  setPurpose(b.purpose || '');
+  const _drv = (b.driverIds && b.driverIds[0]) ? b.driverIds[0] : '';
+  document.getElementById('tourDriver').value = _drv;
+  document.getElementById('pdDriver').value   = _drv;
   document.getElementById('bkStatus').value = 'confirmed';
   document.getElementById('bkNotes').value  = b.notes || '';
 
@@ -729,6 +801,12 @@ function cancelHold(id) {
 }
 
 /* ═══════════════════════ FINANCIAL TOGGLE ══════════ */
+function stepVal(id, step) {
+  const el = document.getElementById(id);
+  const cur = parseFloat(el.value) || 0;
+  el.value = Math.max(0, cur + step);
+}
+
 function toggleFin() {
   const show = document.getElementById('finFields').style.display === 'none';
   document.getElementById('finFields').style.display = show ? '' : 'none';
@@ -780,7 +858,9 @@ function saveBk(forceStatus) {
   }
 
   const status   = forceStatus || document.getElementById('bkStatus').value;
-  const driverId = document.getElementById('tourDriver').value;
+  const driverId = svcType === 'pick_drop'
+    ? document.getElementById('pdDriver').value
+    : document.getElementById('tourDriver').value;
 
   const payload = {
     customerId:    curCust.id,
@@ -798,6 +878,7 @@ function saveBk(forceStatus) {
     commission:    document.getElementById('bkComm').value  || null,
     status,
     notes:         document.getElementById('bkNotes').value.trim(),
+    purpose:       selPurpose,
   };
 
   const editId = document.getElementById('editBkId').value;
@@ -827,8 +908,11 @@ function clearBkForm() {
     document.getElementById(id).value = '';
   });
   pdPicker.setDate(FleetDB.today());
-  tourRangePicker.clear();
+  tourFromPicker.clear();
+  tourToPicker.clear();
+  setPurpose('');
   document.getElementById('tourDriver').value = '';
+  document.getElementById('pdDriver').value    = '';
   document.getElementById('bkStatus').value   = 'confirmed';
   document.getElementById('finFields').style.display = 'none';
   document.getElementById('finIcon').textContent     = '▸';

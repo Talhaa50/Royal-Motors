@@ -63,6 +63,23 @@
     </div>
     <div class="modal-body">
       <input type="hidden" id="vId"/>
+      <input type="hidden" id="vPhoto"/>
+
+      <!-- Photo upload -->
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+        <div id="vPhotoPreview" style="width:72px;height:56px;border-radius:8px;background:var(--bg-elevated);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;">
+          <span style="font-size:22px;">🚗</span>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Vehicle Photo</div>
+          <label style="cursor:pointer;">
+            <span class="btn btn-secondary btn-sm">📷 Upload Photo</span>
+            <input type="file" id="vPhotoFile" accept="image/*" style="display:none;" onchange="previewPhoto(this)"/>
+          </label>
+          <button class="btn btn-ghost btn-sm" style="margin-left:6px;" onclick="clearPhoto()">Remove</button>
+        </div>
+      </div>
+
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Plate Number <span class="required">*</span></label>
@@ -108,17 +125,11 @@
           </select>
         </div>
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Assign Driver</label>
-          <select class="form-select" id="vDriver">
-            <option value="">— None —</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Commission %</label>
-          <input type="number" class="form-input" id="vCommPct" placeholder="15" min="0" max="100"/>
-        </div>
+      <div class="form-group">
+        <label class="form-label">Assign Driver</label>
+        <select class="form-select" id="vDriver">
+          <option value="">— None —</option>
+        </select>
       </div>
       <div class="form-group">
         <label class="form-label">Notes</label>
@@ -230,8 +241,9 @@ function editVehicle(id) {
   document.getElementById('vVendor').value    = v.vendorId||'';
   document.getElementById('vStatus').value    = v.status||'active';
   document.getElementById('vDriver').value  = v.driverId||'';
-  document.getElementById('vCommPct').value = v.commPct||'';
   document.getElementById('vNotes').value   = v.notes||'';
+  document.getElementById('vPhoto').value   = v.photo||'';
+  setPhotoPreview(v.photo||'');
   document.getElementById('vModalTitle').textContent = 'Edit Vehicle';
   FleetDB.openModal('vehicleModal');
 }
@@ -242,8 +254,6 @@ function saveVehicle() {
   const editingId = document.getElementById('vId').value;
   if (!plate)  { FleetDB.showToast('Plate required','error'); return; }
   if (!vendor) { FleetDB.showToast('Select a vendor','error'); return; }
-  const commPctVal = parseFloat(document.getElementById('vCommPct').value);
-  if (!isNaN(commPctVal) && (commPctVal < 0 || commPctVal > 100)) { FleetDB.showToast('Commission must be 0–100%', 'error'); return; }
   const dup = FleetDB.getVehicles().find(v => v.plate.toUpperCase() === plate && v.id !== editingId);
   if (dup) { FleetDB.showToast('Plate ' + plate + ' already exists','error'); return; }
   const data = {
@@ -254,8 +264,8 @@ function saveVehicle() {
     category: document.getElementById('vCategory').value,
     status:   document.getElementById('vStatus').value,
     driverId: document.getElementById('vDriver').value||null,
-    commPct:  parseFloat(document.getElementById('vCommPct').value)||15,
     notes:    document.getElementById('vNotes').value.trim(),
+    photo:    document.getElementById('vPhoto').value || null,
   };
   const id = document.getElementById('vId').value;
   if (id) FleetDB.updateVehicle(id, data);
@@ -265,8 +275,31 @@ function saveVehicle() {
   renderVehicles();
 }
 
+function previewPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('vPhoto').value = e.target.result;
+    setPhotoPreview(e.target.result);
+  };
+  reader.readAsDataURL(file);
+}
+function setPhotoPreview(src) {
+  const el = document.getElementById('vPhotoPreview');
+  el.innerHTML = src
+    ? `<img src="${src}" style="width:100%;height:100%;object-fit:cover;"/>`
+    : '<span style="font-size:22px;">🚗</span>';
+}
+function clearPhoto() {
+  document.getElementById('vPhoto').value = '';
+  document.getElementById('vPhotoFile').value = '';
+  setPhotoPreview('');
+}
+
 function clearForm() {
-  ['vId','vPlate','vYear','vMake','vModel','vNotes','vCommPct'].forEach(i => document.getElementById(i).value='');
+  ['vId','vPlate','vYear','vMake','vModel','vNotes','vPhoto'].forEach(i => document.getElementById(i).value='');
+  clearPhoto();
   document.getElementById('vVendor').value   = '';
   document.getElementById('vCategory').value = '';
   document.getElementById('vStatus').value   = 'active';

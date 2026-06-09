@@ -138,6 +138,67 @@
         </div>
       </div>
 
+      <!-- Company Profile (for invoices) -->
+      <div class="card" style="padding:24px;grid-column:1/-1;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px;">Company Profile</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:18px;">Used on printed customer invoices</div>
+
+        <!-- Logo + Signature -->
+        <div class="form-row" style="margin-bottom:16px;">
+          <div class="form-group">
+            <label class="form-label">Company Logo</label>
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div id="logoPreview" style="width:64px;height:64px;border-radius:8px;border:1px solid var(--border);background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:28px;flex-shrink:0;">🏢</div>
+              <div>
+                <label style="cursor:pointer;"><span class="btn btn-secondary btn-sm">📷 Upload Logo</span><input type="file" id="logoFile" accept="image/*" style="display:none;" onchange="previewCpImg('logo',this)"/></label>
+                <button class="btn btn-ghost btn-sm" style="margin-left:6px;" onclick="clearCpImg('logo')">Remove</button>
+              </div>
+            </div>
+            <input type="hidden" id="cpLogo"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Signature Image</label>
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div id="sigPreview" style="width:90px;height:54px;border-radius:6px;border:1px solid var(--border);background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:22px;flex-shrink:0;">✍️</div>
+              <div>
+                <label style="cursor:pointer;"><span class="btn btn-secondary btn-sm">📷 Upload Signature</span><input type="file" id="sigFile" accept="image/*" style="display:none;" onchange="previewCpImg('sig',this)"/></label>
+                <button class="btn btn-ghost btn-sm" style="margin-left:6px;" onclick="clearCpImg('sig')">Remove</button>
+              </div>
+            </div>
+            <input type="hidden" id="cpSig"/>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">NTN Number</label><input type="text" class="form-input" id="cpNtn" placeholder="e.g. H672704"/></div>
+          <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="cpEmail" placeholder="royalrentacar555@gmail.com"/></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Full Address</label>
+          <input type="text" class="form-input" id="cpAddress" placeholder="14Km Multan Rd, Opp Metro Cash & Carry Thokar Niaz Baig Lahore…"/>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Contact 1</label><input type="text" class="form-input" id="cpContact1" placeholder="+92300-5511534"/></div>
+          <div class="form-group"><label class="form-label">Contact 2</label><input type="text" class="form-input" id="cpContact2" placeholder="+92300-0837161"/></div>
+        </div>
+
+        <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin:14px 0 10px;text-transform:uppercase;letter-spacing:.5px;">Bank Accounts</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Bank 1 Name</label><input type="text" class="form-input" id="cpBank1Name" placeholder="Islami Bank"/></div>
+          <div class="form-group"><label class="form-label">Account Number</label><input type="text" class="form-input" id="cpBank1Acc" placeholder="222400030260001"/></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Bank 2 Name</label><input type="text" class="form-input" id="cpBank2Name" placeholder="Alfalah Bank"/></div>
+          <div class="form-group"><label class="form-label">Account Number</label><input type="text" class="form-input" id="cpBank2Acc" placeholder="58885001710251"/></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Bank 3 Name</label><input type="text" class="form-input" id="cpBank3Name" placeholder="Faysal Bank"/></div>
+          <div class="form-group"><label class="form-label">Account Number</label><input type="text" class="form-input" id="cpBank3Acc" placeholder="37083010000051"/></div>
+        </div>
+
+        <button class="btn btn-primary" style="margin-top:12px;" onclick="saveCompanyProfile()">Save Company Profile</button>
+      </div>
+
       <!-- Danger zone -->
       <div class="card" style="padding:24px;border:1px solid var(--red)22;">
         <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:var(--red);">Danger Zone</div>
@@ -177,6 +238,13 @@ function loadSettings() {
   document.getElementById('alertThreshold').value = s.alertThreshold|| '100000';
   if (window.fbAuth && window.fbAuth.currentUser)
     document.getElementById('authEmailDisplay').value = window.fbAuth.currentUser.email || '';
+
+  // Company profile
+  ['cpNtn','cpEmail','cpAddress','cpContact1','cpContact2',
+   'cpBank1Name','cpBank1Acc','cpBank2Name','cpBank2Acc','cpBank3Name','cpBank3Acc']
+    .forEach(f => { const el = document.getElementById(f); if (el) el.value = s[f] || ''; });
+  if (s.cpLogo) { document.getElementById('cpLogo').value = s.cpLogo; document.getElementById('logoPreview').innerHTML = `<img src="${s.cpLogo}" style="max-width:100%;max-height:100%;object-fit:contain;"/>`; }
+  if (s.cpSig)  { document.getElementById('cpSig').value  = s.cpSig;  document.getElementById('sigPreview').innerHTML  = `<img src="${s.cpSig}"  style="max-width:100%;max-height:100%;object-fit:contain;"/>`; }
 
   // Theme buttons
   const theme = FleetDB.getTheme();
@@ -367,6 +435,37 @@ function restoreRecord(entity, id) {
   FleetDB.showToast('Record restored successfully');
   renderAudit();
   loadSettings();
+}
+
+/* ── Company Profile ── */
+function previewCpImg(type, input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const src = e.target.result;
+    document.getElementById(type === 'logo' ? 'cpLogo' : 'cpSig').value = src;
+    const prev = document.getElementById(type === 'logo' ? 'logoPreview' : 'sigPreview');
+    prev.innerHTML = `<img src="${src}" style="max-width:100%;max-height:100%;object-fit:contain;"/>`;
+  };
+  reader.readAsDataURL(file);
+}
+function clearCpImg(type) {
+  const isLogo = type === 'logo';
+  document.getElementById(isLogo ? 'cpLogo' : 'cpSig').value = '';
+  document.getElementById(isLogo ? 'logoFile' : 'sigFile').value = '';
+  document.getElementById(isLogo ? 'logoPreview' : 'sigPreview').innerHTML = isLogo ? '🏢' : '✍️';
+}
+function saveCompanyProfile() {
+  const fields = ['cpNtn','cpEmail','cpAddress','cpContact1','cpContact2',
+                  'cpBank1Name','cpBank1Acc','cpBank2Name','cpBank2Acc','cpBank3Name','cpBank3Acc'];
+  const data = {};
+  fields.forEach(f => data[f] = document.getElementById(f).value.trim());
+  const logo = document.getElementById('cpLogo').value;
+  const sig  = document.getElementById('cpSig').value;
+  if (logo) data.cpLogo = logo;
+  if (sig)  data.cpSig  = sig;
+  FleetDB.updateSettings(data);
+  FleetDB.showToast('Company profile saved');
 }
 
 loadSettings();

@@ -21,6 +21,8 @@ const FleetDB = (() => {
     bookings:       'fo_bookings',
     expenses:       'fo_expenses',
     fixedCosts:     'fo_fixed_costs',
+    shifts:         'fo_shift_closes',
+    cashEntries:    'fo_cash_entries',
   };
 
   /* ── Helpers ─────────────────────────────── */
@@ -32,7 +34,18 @@ const FleetDB = (() => {
     if (window.FleetSync) window.FleetSync.queuePush(k);
   };
   const uid   = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  const today = () => new Date().toISOString().split('T')[0];
+  // All dates/times are based on Pakistan Standard Time (Asia/Karachi, UTC+5).
+  const today = () => new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Karachi', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());                               // -> 'YYYY-MM-DD' in PKT
+  // Live PKT date+time string for display, e.g. "Mon, 8 Jun 2026 · 2:56 PM PKT"
+  const nowPKT = () => {
+    const d = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Karachi', weekday: 'short', day: 'numeric', month: 'short',
+      year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true
+    }).format(new Date());
+    return d + ' PKT';
+  };
   const fmt       = n => 'PKR ' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 0 });
   const escapeHtml = s => String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -366,7 +379,7 @@ const FleetDB = (() => {
   function addDriver(data) {
     const drivers = getDrivers();
     const id = 'd' + uid();
-    const d = { id, name:data.name||'', phone:data.phone||'', cnic:data.cnic||'', salary:parseFloat(data.salary)||0, vehicleId:data.vehicleId||'', status:'active' };
+    const d = { id, name:data.name||'', phone:data.phone||'', cnic:data.cnic||'', salary:parseFloat(data.salary)||0, license:data.license||'', notes:data.notes||'', photo:data.photo||null, vehicleId:data.vehicleId||'', status:'active', createdAt: today() };
     drivers.push(d);
     save(KEYS.drivers, drivers);
     return d;
@@ -923,7 +936,7 @@ const FleetDB = (() => {
     const ARRAY_KEYS = new Set([
       KEYS.vendors, KEYS.vehicles, KEYS.drivers, KEYS.trips, KEYS.payouts,
       KEYS.salaryPayments, KEYS.auditLog, KEYS.customers, KEYS.advances,
-      KEYS.bookings, KEYS.expenses, KEYS.fixedCosts,
+      KEYS.bookings, KEYS.expenses, KEYS.fixedCosts, KEYS.shifts, KEYS.cashEntries,
     ]);
 
     Object.entries(data).forEach(([k, v]) => {
@@ -969,6 +982,52 @@ const FleetDB = (() => {
   function getUnpaidSalariesForMonth(month) {
     const drivers = getDrivers().filter(d => d.status === 'active');
     return drivers.filter(d => !getSalaryPayments().find(p => p.driverId === d.id && p.month === month));
+  }
+
+  /* ── Shift Closes (cash-on-hand reconciliation) ── */
+  const getShiftCloses = () => load(KEYS.shifts);
+  function addShiftClose(data) {
+    const shifts = getShiftCloses();
+    const id = 'SH-' + uid();
+    const expected = parseFloat(data.expected) || 0;
+    const counted  = parseFloat(data.counted)  || 0;
+    const shift = {
+      id,
+      date:     data.date || today(),
+      expected,
+      counted,
+      diff:     counted - expected,   // + over, - short
+      note:     data.note || '',
+      closedAt: nowPKT(),
+      createdAt: today(),
+    };
+    shifts.unshift(shift);            // newest first
+    save(KEYS.shifts, shifts);
+    return shift;
+  }
+  function deleteShiftClose(id) {
+    save(KEYS.shifts, getShiftCloses().filter(s => s.id !== id));
+  }
+
+  /* ── Manual cash entries (owner-added cash in / out) ── */
+  const getCashEntries = () => load(KEYS.cashEntries);
+  function addCashEntry(data) {
+    const list = getCashEntries();
+    const id = 'CASH-' + uid();
+    const entry = {
+      id,
+      type:   data.type === 'out' ? 'out' : 'in',
+      amount: parseFloat(data.amount) || 0,
+      date:   data.date || today(),
+      note:   data.note || '',
+      createdAt: today(),
+    };
+    list.unshift(entry);
+    save(KEYS.cashEntries, list);
+    return entry;
+  }
+  function deleteCashEntry(id) {
+    save(KEYS.cashEntries, getCashEntries().filter(e => e.id !== id));
   }
 
   /* ── Settings helpers ───────────────────── */
@@ -1044,7 +1103,11 @@ const FleetDB = (() => {
           <div class="avatar" id="topbarAvatar" title="Signed in user">OP</div>
         </div>`;
       const dl = document.getElementById('dateLabel');
-      if (dl) dl.textContent = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+      if (dl) {
+        const tick = () => { dl.textContent = nowPKT(); };
+        tick();
+        setInterval(tick, 1000 * 30);   // live Pakistan time, refresh every 30s
+      }
     }
 
     // Sidebar
@@ -1270,6 +1333,8 @@ const FleetDB = (() => {
     getVendors, getVehicles, getDrivers, getTrips, getPayouts, getSettings,
     getVendor, getVehicle, getDriver,
     getSalaryPayments,
+    getShiftCloses, addShiftClose, deleteShiftClose,
+    getCashEntries, addCashEntry, deleteCashEntry,
     // Computed
     getVendorBalance, getVendorStats, getDashboardStats, getTripsByDay,
     getDriverSalaryStatus, getUnpaidSalariesForMonth,
@@ -1297,7 +1362,7 @@ const FleetDB = (() => {
     getCustomerBookingHistory,
     getAdvances, addAdvance, settleAdvance, deleteAdvance, getDriverAdvanceSummary,
     // Helpers
-    fmtMoney, fmtK, today, escapeHtml,
+    fmtMoney, fmtK, today, nowPKT, escapeHtml,
     // UI
     init, renderShell, showToast, openModal, closeModal, openPrintWindow, pagerHTML, debounce,
     showLoadingOverlay, hideLoadingOverlay,
