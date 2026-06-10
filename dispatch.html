@@ -460,6 +460,7 @@ tourToPicker   = flatpickr('#tourTo',   { dateFormat: 'Y-m-d', defaultDate: 'tod
 
 /* ═══════════════════════ INIT ════════════════════════ */
 populateTourDrivers();
+FleetDB.enhanceSelects(['tourDriver', 'pdDriver']);
 renderVehicles();
 renderHoldQueue();
 setSvc('tour');

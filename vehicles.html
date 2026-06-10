@@ -196,6 +196,7 @@ FleetDB.getDrivers().forEach(d => {
   const o = document.createElement('option'); o.value = d.id; o.textContent = d.name;
   document.getElementById('vDriver').appendChild(o);
 });
+FleetDB.enhanceSelects(['vendorF', 'vVendor', 'vDriver']);
 
 document.getElementById('addVehicleBtn').onclick = function() {
   clearForm(); FleetDB.openModal('vehicleModal');

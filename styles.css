@@ -462,7 +462,72 @@ img{max-width:100%;display:block;}
 .form-select{
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%232A9D8F' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;
+  cursor:pointer;
 }
+.form-select:hover{border-color:var(--accent);}
+
+/* ── Themed native dropdown popups (option list matches the app theme) ── */
+/* color-scheme makes the browser render the dropdown list (and scrollbar) dark */
+html{color-scheme:dark;}
+[data-theme="light"]{color-scheme:light;}
+.form-select option,
+select option{
+  background-color:var(--bg-elevated);
+  color:var(--text-primary);
+  padding:10px 12px;
+  font-size:var(--text-sm);
+}
+.form-select option:checked,
+.form-select option:hover,
+select option:checked{
+  background:var(--accent);
+  color:#fff;
+  font-weight:600;
+}
+.form-select option:disabled,
+select option:disabled{color:var(--text-muted);}
+
+/* ── Custom dropdown (fully themed, searchable) ── */
+.csel{position:relative;width:100%;}
+.csel-btn{
+  width:100%;height:36px;background:var(--bg-elevated);border:1px solid var(--border-mid);
+  border-radius:var(--r-md);padding:0 30px 0 12px;color:var(--text-primary);
+  font-size:var(--text-sm);font-family:inherit;text-align:left;cursor:pointer;
+  display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  transition:border-color var(--t-fast),box-shadow var(--t-fast);
+}
+.csel-btn.placeholder{color:var(--text-muted);}
+.csel-btn::after{
+  content:"";position:absolute;right:12px;top:50%;width:0;height:0;
+  border-left:5px solid transparent;border-right:5px solid transparent;
+  border-top:6px solid var(--accent);transform:translateY(-50%);pointer-events:none;
+  transition:transform var(--t-fast);
+}
+.csel:hover .csel-btn{border-color:var(--accent);}
+.csel.open .csel-btn{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-subtle);}
+.csel.open .csel-btn::after{transform:translateY(-50%) rotate(180deg);}
+.csel-panel{
+  position:absolute;top:calc(100% + 5px);left:0;right:0;z-index:1200;display:none;
+  background:var(--bg-elevated);border:1px solid var(--accent-border,var(--border));
+  border-radius:var(--r-md);box-shadow:0 12px 34px rgba(0,0,0,.35);
+  padding:6px;max-height:280px;overflow:hidden;
+}
+.csel.open .csel-panel{display:flex;flex-direction:column;}
+.csel-search{
+  width:100%;height:32px;flex-shrink:0;margin-bottom:6px;
+  background:var(--bg-card,rgba(255,255,255,.04));border:1px solid var(--border);
+  border-radius:var(--r-sm);padding:0 10px;color:var(--text-primary);font-size:var(--text-sm);font-family:inherit;
+}
+.csel-search:focus{outline:none;border-color:var(--accent);}
+.csel-list{overflow-y:auto;}
+.csel-opt{
+  padding:8px 10px;border-radius:var(--r-sm);font-size:var(--text-sm);cursor:pointer;
+  color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.csel-opt:hover{background:var(--accent-subtle);}
+.csel-opt.sel{background:var(--accent);color:#fff;font-weight:var(--fw-semibold);}
+.csel-opt.dis{color:var(--text-muted);cursor:default;}
+.csel-opt.dis:hover{background:transparent;}
 
 /* ════════════════════════════════════════════
    BADGES & STATUS

@@ -360,6 +360,7 @@ function confirmPayout() {
 
 document.getElementById('lSearch').oninput = FleetDB.debounce(() => { ledgerPage = 0; render(); }, 280);
 populateVendorSelects();
+FleetDB.enhanceSelects(['vendorF', 'typeF', 'npVendor', 'npMethod']);
 render();
 </script>
 </body>

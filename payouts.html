@@ -137,6 +137,7 @@ FleetDB.getVendors().forEach(v => {
   const o2 = o.cloneNode(true);
   document.getElementById('vendorF').appendChild(o2);
 });
+FleetDB.enhanceSelects(['vendorF', 'methodF', 'npVendor', 'npMethod']);
 
 function render() {
   const vf = document.getElementById('vendorF').value;

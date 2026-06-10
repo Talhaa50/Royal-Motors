@@ -1309,6 +1309,86 @@ const FleetDB = (() => {
     return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
   }
 
+  /* ── Custom dropdown — replaces a native <select> with a themed, searchable
+        dropdown. Keeps the original <select> in the DOM (hidden) so all existing
+        .value reads/writes and change handlers keep working. ── */
+  function enhanceSelect(sel) {
+    if (!sel || sel.dataset.csel || sel.multiple) return;
+    sel.dataset.csel = '1';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'csel';
+    if (sel.style.width) { wrap.style.width = sel.style.width; wrap.style.display = 'inline-block'; }
+    sel.parentNode.insertBefore(wrap, sel);
+    wrap.appendChild(sel);
+    sel.style.display = 'none';
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'csel-btn';
+    if (sel.style.height) btn.style.height = sel.style.height;
+
+    const panel  = document.createElement('div'); panel.className = 'csel-panel';
+    const search = document.createElement('input'); search.type = 'text'; search.className = 'csel-search'; search.placeholder = 'Search…';
+    const list   = document.createElement('div');   list.className = 'csel-list';
+    panel.appendChild(search); panel.appendChild(list);
+    wrap.appendChild(btn); wrap.appendChild(panel);
+
+    const updateBtn = () => {
+      const o = sel.options[sel.selectedIndex];
+      btn.textContent = (o && o.textContent.trim()) ? o.textContent : '—';
+      btn.classList.toggle('placeholder', !(o && o.value));
+    };
+    const render = (q) => {
+      q = (q || '').toLowerCase();
+      list.innerHTML = '';
+      let shown = 0;
+      Array.from(sel.options).forEach(opt => {
+        if (q && !opt.textContent.toLowerCase().includes(q)) return;
+        shown++;
+        const it = document.createElement('div');
+        it.className = 'csel-opt' + (opt.selected ? ' sel' : '') + (opt.disabled ? ' dis' : '');
+        it.textContent = opt.textContent;
+        it.addEventListener('mousedown', e => {
+          e.preventDefault();
+          if (opt.disabled) return;
+          sel.value = opt.value;
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+          updateBtn(); close();
+        });
+        list.appendChild(it);
+      });
+      if (!shown) list.innerHTML = '<div class="csel-opt dis">No matches</div>';
+    };
+    const open = () => {
+      document.querySelectorAll('.csel.open').forEach(w => w.classList.remove('open'));
+      wrap.classList.add('open'); search.value = ''; render(''); setTimeout(() => search.focus(), 10);
+    };
+    const close = () => wrap.classList.remove('open');
+
+    btn.addEventListener('click', e => { e.stopPropagation(); wrap.classList.contains('open') ? close() : open(); });
+    search.addEventListener('click', e => e.stopPropagation());
+    search.addEventListener('input', () => render(search.value));
+    panel.addEventListener('click', e => e.stopPropagation());
+    document.addEventListener('click', close);
+
+    // Rebuild when options are added/removed dynamically (e.g. driver list populated after load)
+    new MutationObserver(() => { updateBtn(); if (wrap.classList.contains('open')) render(search.value); })
+      .observe(sel, { childList: true });
+
+    // Reflect programmatic value changes (e.g. editBooking setting sel.value)
+    const desc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+    Object.defineProperty(sel, 'value', {
+      configurable: true,
+      get() { return desc.get.call(this); },
+      set(v) { desc.set.call(this, v); updateBtn(); },
+    });
+    sel.addEventListener('change', updateBtn);
+    updateBtn();
+  }
+  // Enhance a list of select element IDs (skips missing ones)
+  function enhanceSelects(ids) { (ids || []).forEach(id => enhanceSelect(document.getElementById(id))); }
+
   /* ── Loading overlay ─────────────────────── */
   function showLoadingOverlay(msg) {
     let el = document.getElementById('fleetLoadingOverlay');
@@ -1439,6 +1519,7 @@ const FleetDB = (() => {
     fmtMoney, fmtK, today, nowPKT, fmtDate, fmtTime, escapeHtml,
     // UI
     init, renderShell, showToast, openModal, closeModal, openPrintWindow, pagerHTML, debounce,
+    enhanceSelect, enhanceSelects,
     showLoadingOverlay, hideLoadingOverlay,
     toggleTheme, getTheme, setTheme,
     toggleSidebar, closeSidebar,
