@@ -65,6 +65,40 @@
 </div>
 <nav class="mobile-nav" id="mobileNav"></nav>
 
+<!-- Vendor Statement Modal -->
+<div class="modal-overlay" id="vendorStmtModal">
+  <div class="modal" style="max-width:760px;">
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div id="vsAvatar" style="width:48px;height:48px;border-radius:50%;background:var(--bg-elevated);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;font-weight:700;"></div>
+        <div>
+          <div class="modal-title" id="vsName">Vendor Statement</div>
+          <div style="font-size:12px;color:var(--text-muted);" id="vsSub"></div>
+        </div>
+      </div>
+      <button class="icon-btn" onclick="FleetDB.closeModal('vendorStmtModal')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:0;">
+      <div id="vsStats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);"></div>
+      <div style="padding:12px 20px 4px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;">Earnings by Vehicle</div>
+      <div class="table-wrap" style="margin:0;border:none;max-height:300px;overflow-y:auto;">
+        <table>
+          <thead><tr>
+            <th>Vehicle</th><th style="text-align:right;">Bookings</th><th style="text-align:right;">Gross</th>
+            <th style="text-align:right;">Vendor Earned</th><th>First</th><th>Last Booking</th>
+          </tr></thead>
+          <tbody id="vsVehBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="FleetDB.closeModal('vendorStmtModal')">Close</button>
+      <button class="btn btn-secondary" onclick="downloadVendorStatement()">⬇ Download Statement</button>
+      <button class="btn btn-primary" onclick="payFromStatement()">⇄ Issue Payout</button>
+    </div>
+  </div>
+</div>
+
 <!-- Payout Modal -->
 <div class="modal-overlay" id="payoutModal">
   <div class="modal" style="max-width:440px;">
@@ -139,7 +173,10 @@ function buildLedgerRows(vendorId) {
     });
   });
 
-  rows.sort((a,b) => a.date.localeCompare(b.date)); // oldest-first
+  // Group by vendor, then oldest-first within each vendor — so the
+  // running-balance column reads correctly top-to-bottom (fixes the
+  // jumbled balance you'd see in "All Vendors" view).
+  rows.sort((a,b) => a.vendorName.localeCompare(b.vendorName) || a.date.localeCompare(b.date));
 
   // Running balance per vendor — accumulates forward from 0
   const balMap = {};
@@ -179,20 +216,23 @@ function render() {
   // Vendor minis
   document.getElementById('vendorMinis').innerHTML = allVendors.map(v => {
     const bal = FleetDB.getVendorBalance(v.id);
-    return `<div class="card" style="padding:14px;cursor:pointer;border:1px solid var(--border);" onclick="document.getElementById('vendorF').value='${v.id}';render();">
+    const av = v.photo
+      ? `<div style="width:24px;height:24px;border-radius:4px;overflow:hidden;flex-shrink:0;"><img src="${v.photo}" style="width:100%;height:100%;object-fit:cover;"/></div>`
+      : `<div style="width:24px;height:24px;border-radius:4px;background:${v.color}33;color:${v.color};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;">${FleetDB.escapeHtml(v.name[0])}</div>`;
+    return `<div class="card" style="padding:14px;cursor:pointer;border:1px solid var(--border);" onclick="location.href='vendor-detail.html?v=${v.id}'" title="Open full vendor detail">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-        <div style="width:24px;height:24px;border-radius:4px;background:${v.color}33;color:${v.color};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;">${FleetDB.escapeHtml(v.name[0])}</div>
+        ${av}
         <span style="font-size:12px;font-weight:600;">${FleetDB.escapeHtml(v.name)}</span>
       </div>
       <div class="mono fw-bold" style="font-size:16px;color:${bal>100000?'var(--amber)':'var(--text-primary)'};">${FleetDB.fmtMoney(bal)}</div>
-      <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Current balance</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Current balance · open detail →</div>
     </div>`;
   }).join('');
 
   // Table
   const ledgerDisplay = rows.slice(ledgerPage * PAGE_SIZE, (ledgerPage + 1) * PAGE_SIZE);
   document.getElementById('ledgerBody').innerHTML = ledgerDisplay.map(r => `<tr>
-    <td class="td-mono">${r.date}</td>
+    <td class="td-mono">${FleetDB.fmtDate(r.date)}</td>
     <td>
       <div style="display:flex;align-items:center;gap:7px;">
         <div style="width:20px;height:20px;border-radius:3px;background:${r.vendorColor}33;color:${r.vendorColor};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;">${FleetDB.escapeHtml(r.vendorName[0])}</div>
@@ -213,6 +253,88 @@ function clearFilters() {
   ['vendorF','typeF','lSearch'].forEach(id => document.getElementById(id).value='');
   ['dFrom','dTo'].forEach(id => document.getElementById(id).value='');
   render();
+}
+
+/* ════════════════════════
+   VENDOR STATEMENT + PER-VEHICLE ANALYTICS
+════════════════════════ */
+let stmtVendorId = null;
+
+function openVendorStatement(id) {
+  const v = FleetDB.getVendor(id);
+  if (!v) return;
+  stmtVendorId = id;
+  const E = FleetDB.escapeHtml;
+  const vehicles = FleetDB.getVehicles().filter(x => x.vendorId === id);
+  const trips    = FleetDB.getTrips().filter(t => t.vendorId === id && t.status !== 'cancelled');
+  const payouts  = FleetDB.getPayouts().filter(p => p.vendorId === id);
+
+  const earned = trips.reduce((s, t) => s + (t.net || 0), 0);
+  const gross  = trips.reduce((s, t) => s + (t.gross || 0), 0);
+  const paid   = payouts.reduce((s, p) => s + (p.amount || 0), 0);
+  const bal    = earned - paid;
+
+  // Header
+  document.getElementById('vsName').textContent = v.name;
+  document.getElementById('vsSub').textContent  = (v.phone || '—') + ' · ' + vehicles.length + ' vehicle' + (vehicles.length !== 1 ? 's' : '');
+  const av = document.getElementById('vsAvatar');
+  if (v.photo) { av.innerHTML = `<img src="${v.photo}" style="width:100%;height:100%;object-fit:cover;"/>`; }
+  else { av.textContent = (v.name || '?')[0]; av.style.background = (v.color || '#2A9D8F') + '33'; av.style.color = v.color || '#2A9D8F'; }
+
+  // Stat tiles
+  document.getElementById('vsStats').innerHTML = [
+    ['Total Bookings', trips.length,                       ''],
+    ['Gross Revenue',  'PKR ' + gross.toLocaleString(),    ''],
+    ['Vendor Earned',  'PKR ' + earned.toLocaleString(),   'color:var(--accent)'],
+    ['Balance Due',    'PKR ' + bal.toLocaleString(),      bal > 0 ? 'color:var(--amber)' : 'color:var(--emerald)'],
+  ].map(([l, val, s]) => `<div style="padding:12px 16px;background:var(--bg-elevated);">
+    <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;">${l}</div>
+    <div style="font-size:15px;font-weight:700;${s}">${val}</div>
+  </div>`).join('');
+
+  // Per-vehicle analytics — which vehicle earns + when bookings happened
+  const byVeh = vehicles.map(vh => {
+    const vt = trips.filter(t => t.vehicleId === vh.id);
+    const dates = vt.map(t => t.date).filter(Boolean).sort();
+    return {
+      plate: vh.plate,
+      count: vt.length,
+      gross: vt.reduce((s, t) => s + (t.gross || 0), 0),
+      earned: vt.reduce((s, t) => s + (t.net || 0), 0),
+      first: dates[0] || '—',
+      last:  dates[dates.length - 1] || '—',
+    };
+  }).sort((a, b) => b.earned - a.earned);   // top earner first
+
+  document.getElementById('vsVehBody').innerHTML = byVeh.map(r => `<tr>
+    <td style="font-family:var(--mono);font-weight:600;font-size:12px;">${E(r.plate)}</td>
+    <td style="text-align:right;" class="td-mono">${r.count}</td>
+    <td style="text-align:right;" class="td-mono">PKR ${r.gross.toLocaleString()}</td>
+    <td style="text-align:right;font-weight:700;color:var(--accent);" class="td-mono">PKR ${r.earned.toLocaleString()}</td>
+    <td class="td-mono" style="font-size:11px;color:var(--text-muted);">${r.first}</td>
+    <td class="td-mono" style="font-size:11px;">${r.last}</td>
+  </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted);">No vehicles for this vendor</td></tr>';
+
+  FleetDB.openModal('vendorStmtModal');
+}
+
+function downloadVendorStatement() {
+  if (!stmtVendorId) return;
+  const html = FleetDB.buildVendorStatementHTML({
+    vendorId: stmtVendorId,
+    periodLabel: 'All-Time Statement',
+    filterFn: () => true,
+  });
+  if (!html) { FleetDB.showToast('Vendor not found', 'error'); return; }
+  FleetDB.openPrintWindow(html);
+}
+
+function payFromStatement() {
+  const id = stmtVendorId;
+  FleetDB.closeModal('vendorStmtModal');
+  document.getElementById('npVendor').value = id;
+  updatePayBal();
+  FleetDB.openModal('payoutModal');
 }
 
 function updatePayBal() {

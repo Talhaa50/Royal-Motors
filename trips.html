@@ -62,6 +62,7 @@
         </select>
         <input type="month" class="form-input" style="height:34px;width:150px;" id="bkMonth" onchange="bkPage=0;renderBookings()"/>
         <button class="btn btn-secondary btn-sm" onclick="document.getElementById('bkMonth').value='';renderBookings()">Clear Month</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportBookings()">⬇ Export</button>
         <div style="margin-left:auto;font-size:13px;color:var(--text-secondary);">
           <span id="bkCount" style="font-weight:600;color:var(--text-primary);">—</span> bookings
         </div>
@@ -91,15 +92,23 @@
 
       <!-- Filters -->
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
-        <select class="form-select" style="width:150px;height:34px;" id="cbFilter" onchange="renderCashbook()">
+        <select class="form-select" style="width:140px;height:34px;" id="cbFilter" onchange="renderCashbook()">
           <option value="">All money</option>
           <option value="in">Money In</option>
           <option value="out">Money Out</option>
         </select>
-        <input type="month" class="form-input" style="height:34px;width:150px;" id="cbMonth" onchange="renderCashbook()"/>
-        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('cbMonth').value='';renderCashbook()">Clear</button>
+        <select class="form-select" style="width:150px;height:34px;" id="cbPeriod" onchange="renderCashbook()">
+          <option value="">All time</option>
+          <option value="today">Today</option>
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="month">This month</option>
+        </select>
+        <input type="month" class="form-input" style="height:34px;width:150px;" id="cbMonth" onchange="renderCashbook()" title="Pick a specific month"/>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('cbMonth').value='';document.getElementById('cbPeriod').value='';renderCashbook()">Clear</button>
         <button class="btn btn-secondary btn-sm" onclick="openCashEntry()">＋ Add Cash In/Out</button>
-        <button class="btn btn-secondary btn-sm" onclick="downloadCashbook()">⬇ Download</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportCashbook()">⬇ Export</button>
+        <button class="btn btn-secondary btn-sm" onclick="downloadCashbook()">🖨 Print</button>
         <div style="margin-left:auto;font-size:13px;color:var(--text-secondary);">
           <span id="cbCount" style="font-weight:600;color:var(--text-primary);">—</span> entries
         </div>
@@ -129,6 +138,7 @@
         </div>
         <input type="month" class="form-input" style="height:34px;width:150px;" id="invMonth" onchange="renderInvoices()"/>
         <button class="btn btn-secondary btn-sm" onclick="document.getElementById('invMonth').value='';renderInvoices()">Clear</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportInvoices()">⬇ Export</button>
         <div style="margin-left:auto;font-size:13px;color:var(--text-secondary);">
           <span id="invCount" style="font-weight:600;color:var(--text-primary);">—</span> completed bookings
         </div>
@@ -136,7 +146,7 @@
       <div id="invList"></div>
 
       <!-- Cash on hand / Close shift -->
-      <div class="card" style="margin-top:22px;padding:0;overflow:hidden;">
+      <div class="card" id="cashShiftCard" style="margin-top:22px;padding:0;overflow:hidden;">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:16px 20px;border-bottom:1px solid var(--border);">
           <div>
             <div style="font-size:14px;font-weight:700;">💵 Cash on Hand — Shift Close</div>
@@ -187,6 +197,17 @@
       <div class="form-group">
         <label class="form-label">Notes (optional)</label>
         <input type="text" class="form-input" id="billNotes" placeholder="Any remarks…"/>
+      </div>
+
+      <!-- Private guard -->
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg-elevated);margin-bottom:10px;">
+        <input type="checkbox" id="billGuard" onchange="toggleBillGuard()" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;"/>
+        <span style="font-size:13px;">🛡️ <strong>Private Security Guard</strong> <span style="color:var(--text-muted);font-size:12px;">— extra charge</span></span>
+      </label>
+      <div class="form-group" id="billGuardWrap" style="display:none;max-width:220px;">
+        <label class="form-label">🛡️ Guard Charges</label>
+        <div class="input-group"><span class="input-prefix">₨</span>
+          <input type="number" class="form-input" id="billGuardCost" placeholder="0" min="0"/></div>
       </div>
 
       <div style="margin-top:12px;padding:10px 14px;background:var(--accent)10;border:1px solid var(--accent)30;border-radius:var(--r-sm);font-size:12px;color:var(--text-secondary);">
@@ -281,10 +302,6 @@
         <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 16px;border-bottom:1px solid var(--border);">
           <span style="font-size:13px;color:var(--text-secondary);">Gross Revenue</span>
           <span id="rcptGross" style="font-size:13px;font-weight:600;font-family:var(--mono);color:var(--text-primary);"></span>
-        </div>
-        <div id="rcptCommRow" style="display:flex;justify-content:space-between;align-items:center;padding:11px 16px;border-bottom:1px solid var(--border);">
-          <span style="font-size:13px;color:var(--text-secondary);">Commission <span id="rcptCommPct" style="font-size:11px;color:var(--text-muted);"></span></span>
-          <span id="rcptComm" style="font-size:13px;font-weight:600;font-family:var(--mono);color:var(--red);"></span>
         </div>
         <div id="rcptExpRow" style="display:flex;justify-content:space-between;align-items:center;padding:11px 16px;border-bottom:1px solid var(--border);">
           <span style="font-size:13px;color:var(--text-secondary);">Expenses</span>
@@ -459,15 +476,85 @@
 <script src="data.js"></script>
 <script>
 FleetDB.init('trips.html');
+const IS_OWNER = FleetDB.getRole() === 'owner';
+// Employees: no Cashbook tab, no sales totals / cash-on-hand (money is owner-only)
+if (!IS_OWNER) {
+  const dt = document.getElementById('tabDt'); if (dt) dt.style.display = 'none';
+  const sc = document.getElementById('salesCards'); if (sc) sc.style.display = 'none';
+  const cs = document.getElementById('cashShiftCard'); if (cs) cs.style.display = 'none';
+}
 const PAGE_SIZE = 50;
 let bkPage = 0, tripPage = 0;
 function gotoBkPage(p)   { bkPage   = p; renderBookings(); }
 function gotoTripPage(p) { tripPage = p; renderTripTable(); }
 
+// "First come, first served" key — real arrival time (ms). New records have
+// createdTs; older ones fall back to their creation date (midnight).
+function arrivalKey(r) {
+  return r.createdTs || (r.createdAt ? Date.parse(r.createdAt) : 0) || 0;
+}
+
+/* ── CSV export (current search/filter results) ── */
+let lastBookings = [], lastInvoices = [], lastCashbookEntries = [];
+function downloadCSV(filename, rows) {
+  const esc = v => { const s = (v == null ? '' : String(v)); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const csv = rows.map(r => r.map(esc).join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+}
+
+function exportBookings() {
+  if (!lastBookings.length) { FleetDB.showToast('No bookings to export', 'error'); return; }
+  const vehicles = FleetDB.getVehicles();
+  const allTrips = FleetDB.getTrips();
+  const rows = [['Booking ID','Date','Customer','Phone','Type','Route / Dates','Vehicles','Purpose','Status','Amount (PKR)']];
+  lastBookings.forEach(b => {
+    const qtys = {}; (b.vehicleIds || []).forEach(id => { qtys[id] = (qtys[id] || 0) + 1; });
+    const veh = Object.entries(qtys).map(([id, q]) => { const v = vehicles.find(x => x.id === id); return (q > 1 ? q + '× ' : '') + (v ? v.plate : id); }).join(' | ');
+    const route = b.serviceType === 'pick_drop' ? (b.fromLocation || '') + ' -> ' + (b.toLocation || '') : FleetDB.fmtDate(b.tourFromDate) + ' -> ' + FleetDB.fmtDate(b.tourToDate);
+    const tr = allTrips.filter(t => t.bookingId === b.id);
+    const amt = tr.length ? tr.reduce((s, t) => s + (t.gross || 0), 0) : (parseFloat(b.gross) || 0);
+    rows.push([b.id, FleetDB.fmtDate(b.requestedDate), b.customerName || '', b.customerPhone || '', SVC_LABEL[b.serviceType] || b.serviceType, route, veh, b.purpose ? (PURPOSE_LABEL[b.purpose] || b.purpose) : '', b.status || '', amt]);
+  });
+  downloadCSV('bookings_' + FleetDB.today() + '.csv', rows);
+  FleetDB.showToast('Exported ' + lastBookings.length + ' bookings');
+}
+
+function exportInvoices() {
+  if (!lastInvoices.length) { FleetDB.showToast('No invoices to export', 'error'); return; }
+  const vehicles = FleetDB.getVehicles();
+  const drivers  = FleetDB.getDrivers();
+  const allTrips = FleetDB.getTrips();
+  const rows = [['Booking ID','Date','Customer','Phone','Type','Route / Dates','Vehicles','Driver','Purpose','Amount (PKR)']];
+  lastInvoices.forEach(b => {
+    const tr = allTrips.filter(t => t.bookingId === b.id);
+    const amt = tr.length ? tr.reduce((s, t) => s + (t.gross || 0), 0) : (parseFloat(b.gross) || 0);
+    const qtys = {}; (b.vehicleIds || []).forEach(id => { qtys[id] = (qtys[id] || 0) + 1; });
+    const veh = Object.entries(qtys).map(([id, q]) => { const v = vehicles.find(x => x.id === id); return (q > 1 ? q + '× ' : '') + (v ? v.plate : id); }).join(' | ');
+    const route = b.serviceType === 'pick_drop' ? (b.fromLocation || '') + ' -> ' + (b.toLocation || '') : FleetDB.fmtDate(b.tourFromDate) + ' -> ' + FleetDB.fmtDate(b.tourToDate);
+    rows.push([b.id, FleetDB.fmtDate(b.requestedDate), b.customerName || '', b.customerPhone || '', SVC_LABEL[b.serviceType] || b.serviceType, route, veh, bookingDriverNames(b, tr, vehicles, drivers), b.purpose ? (PURPOSE_LABEL[b.purpose] || b.purpose) : '', amt]);
+  });
+  downloadCSV('invoices_' + FleetDB.today() + '.csv', rows);
+  FleetDB.showToast('Exported ' + lastInvoices.length + ' invoices');
+}
+
+function exportCashbook() {
+  if (!lastCashbookEntries.length) { FleetDB.showToast('No entries to export', 'error'); return; }
+  const rows = [['Date','Direction','Type','Description','Money In (PKR)','Money Out (PKR)']];
+  lastCashbookEntries.forEach(e => {
+    rows.push([e.date || '', e.dir === 'in' ? 'IN' : 'OUT', e.kind, e.desc, e.dir === 'in' ? e.amount : '', e.dir === 'out' ? e.amount : '']);
+  });
+  downloadCSV('cashbook_' + FleetDB.today() + '.csv', rows);
+  FleetDB.showToast('Exported ' + lastCashbookEntries.length + ' entries');
+}
+
 /* ════════════════════════
    TAB SWITCHING
 ════════════════════════ */
 function showTab(tab) {
+  if (tab === 'duties' && !IS_OWNER) tab = 'bookings';   // Cashbook is owner-only
   ['bookings','duties','invoices'].forEach(t => {
     const el = document.getElementById('panel' + t.charAt(0).toUpperCase() + t.slice(1));
     if (el) el.style.display = t === tab ? '' : 'none';
@@ -501,8 +588,8 @@ const BK_STATUS_BADGE = {
   completed: 'badge-teal',
   cancelled: 'badge-red',
 };
-const SVC_ICON  = { pick_drop:'🚗', tour:'🗺' };
-const SVC_LABEL = { pick_drop:'Pick & Drop', tour:'Tour' };
+const SVC_ICON  = { pick_drop:'🛞', tour:'🌍' };
+const SVC_LABEL = { pick_drop:'Pick & Drop', tour:'Duty' };
 
 function renderBookings() {
   const q       = (document.getElementById('bkSearch').value  || '').toLowerCase();
@@ -511,11 +598,12 @@ function renderBookings() {
   const mf      = document.getElementById('bkMonth').value;   // 'YYYY-MM'
   const vehicles = FleetDB.getVehicles();
 
-  let bks = (FleetDB.getBookings() || []).filter(Boolean);
+  // Include soft-deleted bookings here so they stay visible (shown in red); they're
+  // excluded everywhere else via FleetDB.getBookings().
+  let bks = (FleetDB.getAllBookings() || []).filter(Boolean);
 
-  // Sort chronologically — earliest first ("first come, first shown"), PKT dates
-  bks.sort((a, b) =>
-    ((a.requestedDate || '') + (a.createdAt || '')).localeCompare((b.requestedDate || '') + (b.createdAt || '')));
+  // Sort by actual booking time — newest on top (latest entry first)
+  bks.sort((a, b) => arrivalKey(b) - arrivalKey(a));
 
   if (sf) bks = bks.filter(b => b.status === sf);
   if (tf) bks = bks.filter(b => b.serviceType === tf);
@@ -532,16 +620,18 @@ function renderBookings() {
     })
   );
 
-  document.getElementById('bkCount').textContent = bks.length;
+  lastBookings = bks.filter(b => !b._deleted);   // exports exclude deleted
+  const live = bks.filter(b => !b._deleted);     // stats/count on live bookings only
+  document.getElementById('bkCount').textContent = live.length;
   const bkTotal = bks.length;
 
-  // Stats
-  const confirmed = bks.filter(b => b.status === 'confirmed').length;
-  const hold      = bks.filter(b => b.status === 'hold').length;
-  const completed = bks.filter(b => b.status === 'completed').length;
-  const cancelled = bks.filter(b => b.status === 'cancelled').length;
+  // Stats (live bookings only)
+  const confirmed = live.filter(b => b.status === 'confirmed').length;
+  const hold      = live.filter(b => b.status === 'hold').length;
+  const completed = live.filter(b => b.status === 'completed').length;
+  const cancelled = live.filter(b => b.status === 'cancelled').length;
   document.getElementById('bkStats').innerHTML = [
-    ['Total',      bks.length,  ''],
+    ['Total',      live.length, ''],
     ['Confirmed',  confirmed,   'color:var(--emerald)'],
     ['On Hold',    hold,        'color:var(--amber)'],
     ['Completed',  completed,   'color:var(--accent)'],
@@ -569,41 +659,69 @@ function renderBookings() {
     }).join(', ') || '—';
 
     const E = FleetDB.escapeHtml;
+    const hasRoute = b.fromLocation || b.toLocation;
+    const routeStr = `${E(b.fromLocation || '—')} → ${E(b.toLocation || '—')}`;
+    const dateStr  = `${E(FleetDB.fmtDate(b.tourFromDate))} → ${E(FleetDB.fmtDate(b.tourToDate))}`;
+    // Route shown for both types; Duty also shows its date range below
     const detail = b.serviceType === 'pick_drop'
-      ? `${E(b.fromLocation || '—')} → ${E(b.toLocation || '—')}`
-      : `${E(b.tourFromDate || '—')} → ${E(b.tourToDate || '—')}`;
+      ? routeStr
+      : (hasRoute
+          ? `${routeStr}<div style="font-size:10px;color:var(--text-muted);">📅 ${dateStr}</div>`
+          : dateStr);
 
-    // Completed bookings get a highlighted, more-visible row
-    const rowStyle = b.status === 'completed'
-      ? 'background:rgba(42,157,143,.12);box-shadow:inset 3px 0 0 var(--accent);'
-      : '';
+    const del = !!b._deleted;
+    // Row highlight: deleted = red/struck; completed = green; advance-paid & not completed = yellow "due"
+    const hasAdv = !del && (b.advancePaid || 0) > 0 && b.status !== 'completed' && b.status !== 'cancelled';
+    const rowStyle = del
+      ? 'background:rgba(239,68,68,.13);box-shadow:inset 4px 0 0 #ef4444;text-decoration:line-through;color:var(--text-muted);'
+      : b.status === 'completed'
+      ? 'background:rgba(16,185,129,.16);box-shadow:inset 4px 0 0 var(--emerald,#10b981);'
+      : (hasAdv ? 'background:rgba(234,179,8,.16);box-shadow:inset 4px 0 0 #eab308;' : '');
 
-    return `<tr style="${rowStyle}">
+    // Status badge
+    const stIcon = (b.status === 'completed' || b.status === 'confirmed') ? '✓ ' : '';
+    const badge  = del
+      ? `<span class="badge badge-red" style="font-size:12.5px;padding:6px 13px;font-weight:700;letter-spacing:.3px;">🗑 Deleted</span>`
+      : hasAdv
+      ? `<span class="badge badge-amber" style="font-size:12.5px;padding:6px 13px;font-weight:700;letter-spacing:.3px;">⏳ Due</span>`
+      : `<span class="badge ${BK_STATUS_BADGE[b.status] || 'badge-muted'}" style="font-size:12.5px;padding:6px 13px;font-weight:700;letter-spacing:.3px;">${stIcon}${E(b.status)}</span>`;
+
+    return `<tr style="${del ? '' : 'cursor:pointer;'}${rowStyle}" ${del ? '' : `onclick="rowAction('${b.id}','${b.status}')"`} title="${del ? 'Deleted booking' : (b.status === 'completed' ? 'Click to open invoice' : 'Click to Complete & Bill')}">
       <td class="td-mono" style="font-size:11px;color:var(--text-muted);">${b.id}</td>
-      <td class="td-mono" style="font-size:12px;">${b.requestedDate || '—'}</td>
+      <td class="td-mono" style="font-size:12px;">${FleetDB.fmtDate(b.requestedDate)}</td>
       <td>
         <div style="font-size:13px;font-weight:600;">${E(b.customerName || '—')}</div>
         <div style="font-size:11px;color:var(--text-muted);font-family:var(--mono);">${E(b.customerPhone || '')}</div>
       </td>
-      <td style="font-size:12px;">${SVC_ICON[b.serviceType] || ''} ${SVC_LABEL[b.serviceType] || b.serviceType}</td>
+      <td style="font-size:12px;white-space:nowrap;">${SVC_ICON[b.serviceType] || ''} ${SVC_LABEL[b.serviceType] || b.serviceType}</td>
       <td style="font-size:12px;color:var(--text-secondary);">${detail}</td>
       <td style="font-size:11px;font-family:var(--mono);color:var(--text-secondary);">${vehStr}</td>
-      <td><span class="badge ${BK_STATUS_BADGE[b.status] || 'badge-muted'}">${E(b.status)}</span></td>
-      <td>
+      <td>${badge}</td>
+      <td onclick="event.stopPropagation()">
         <div style="display:flex;gap:5px;flex-wrap:wrap;">
-          ${(b.status === 'confirmed' || b.status === 'pending')
-            ? `<button class="btn btn-sm" style="background:var(--emerald)18;color:var(--emerald);border:1px solid var(--emerald)44;white-space:nowrap;"
-                       onclick="openBillModal('${b.id}')">✓ Complete &amp; Bill</button>`
-            : b.status === 'completed'
-            ? `<span style="font-size:11px;color:var(--accent);">✓ Billed</span>`
-            : ''}
-          <button class="btn btn-secondary btn-sm" onclick="editBooking('${b.id}')">Edit</button>
-          <button class="btn btn-danger btn-sm"    onclick="deleteBooking('${b.id}')">Del</button>
+          ${del
+            ? `<button class="btn btn-sm" style="background:var(--accent)18;color:var(--accent);border:1px solid var(--accent)44;white-space:nowrap;" onclick="restoreBooking('${b.id}')">↩ Restore</button>`
+            : `${(b.status === 'confirmed' || b.status === 'pending')
+                  ? `<button class="btn btn-sm" style="background:var(--emerald)18;color:var(--emerald);border:1px solid var(--emerald)44;white-space:nowrap;"
+                             onclick="openBillModal('${b.id}')">✓ Complete &amp; Bill</button>`
+                  : b.status === 'completed'
+                  ? `<span style="font-size:11px;color:var(--accent);">✓ Billed</span>`
+                  : ''}
+               ${hasAdv ? `<button class="btn btn-sm" style="background:#eab30822;color:#b8860b;border:1px solid #eab30855;white-space:nowrap;" onclick="printBookingReceipt('${b.id}')">🧾 Receipt</button>` : ''}
+               <button class="btn btn-secondary btn-sm" onclick="editBooking('${b.id}')">Edit</button>
+               ${FleetDB.getRole() === 'owner' ? `<button class="btn btn-danger btn-sm" onclick="deleteBooking('${b.id}')">Del</button>` : ''}`}
         </div>
       </td>
     </tr>`;
   }).join('');
   document.getElementById('bkPager').innerHTML = FleetDB.pagerHTML(bkTotal, bkPage, PAGE_SIZE, 'gotoBkPage');
+}
+
+// Row click: confirmed/pending → Complete & Bill; completed → print invoice; else edit
+function rowAction(id, status) {
+  if (status === 'confirmed' || status === 'pending') openBillModal(id);
+  else if (status === 'completed') printCustomerInvoice(id);
+  else editBooking(id);
 }
 
 function editBooking(id) {
@@ -628,9 +746,15 @@ function saveEditBk() {
 }
 
 function deleteBooking(id) {
-  if (!confirm('Delete booking ' + id + '?')) return;
+  if (!confirm('Mark booking ' + id + ' as deleted?\n\nIt will stay visible here in red but be excluded from invoices, cashbook, customer & vendor records. You can Restore it anytime.')) return;
   FleetDB.deleteBooking(id);
-  FleetDB.showToast('Booking deleted');
+  FleetDB.showToast('Booking marked deleted');
+  renderBookings();
+}
+
+function restoreBooking(id) {
+  FleetDB.restoreBooking(id);
+  FleetDB.showToast('Booking restored');
   renderBookings();
 }
 
@@ -805,7 +929,7 @@ function openReceipt(id) {
   const dr = FleetDB.getDrivers().find(x => x.id === t.driverId);
   const vn = FleetDB.getVendors().find(x => x.id === t.vendorId);
   const sb = { completed:'badge-green', pending:'badge-amber', cancelled:'badge-red' };
-  const dateF = t.date ? new Date(t.date + 'T00:00:00').toLocaleDateString('en-US',{day:'numeric',month:'long',year:'numeric'}) : '—';
+  const dateF = FleetDB.fmtDate(t.date);
   document.getElementById('rcptId').textContent      = t.id;
   document.getElementById('rcptDate').textContent    = dateF;
   document.getElementById('rcptStatus').className    = 'badge ' + (sb[t.status] || 'badge-muted');
@@ -815,8 +939,6 @@ function openReceipt(id) {
   document.getElementById('rcptDriver').textContent  = dr ? dr.name : '—';
   document.getElementById('rcptVendor').textContent  = vn ? vn.name : '—';
   document.getElementById('rcptGross').textContent   = 'PKR ' + (t.gross||0).toLocaleString();
-  document.getElementById('rcptComm').textContent    = '− PKR ' + (t.commission||0).toLocaleString();
-  document.getElementById('rcptCommPct').textContent = t.commPct ? '('+t.commPct+'%)' : '';
   document.getElementById('rcptNet').textContent     = 'PKR ' + (t.net||0).toLocaleString();
   document.getElementById('rcptExpRow').style.display = t.expenses > 0 ? '' : 'none';
   if (t.expenses > 0) document.getElementById('rcptExp').textContent = '− PKR ' + t.expenses.toLocaleString();
@@ -835,6 +957,12 @@ function printReceipt(id) {
 /* ════════════════════════
    COMPLETE & BILL
 ════════════════════════ */
+function toggleBillGuard() {
+  const on = document.getElementById('billGuard').checked;
+  document.getElementById('billGuardWrap').style.display = on ? '' : 'none';
+  if (!on) document.getElementById('billGuardCost').value = '';
+}
+
 function openBillModal(bkId) {
   const b        = FleetDB.getBooking(bkId);
   if (!b) return;
@@ -845,14 +973,18 @@ function openBillModal(bkId) {
   document.getElementById('billBkInfo').textContent = bkId + ' — ' + (b.customerName || '');
   document.getElementById('billDate').value        = FleetDB.today();
   document.getElementById('billNotes').value       = '';
+  // Guard — prefill from the booking
+  document.getElementById('billGuard').checked  = !!b.guard;
+  document.getElementById('billGuardCost').value = b.guardCost || '';
+  toggleBillGuard();
 
   // Summary strip
   const detail = b.serviceType === 'pick_drop'
     ? `🚗 ${b.fromLocation || '?'} → ${b.toLocation || '?'}`
-    : `🗺 Tour: ${b.tourFromDate || '?'} → ${b.tourToDate || '?'}`;
+    : `🗺 Duty: ${FleetDB.fmtDate(b.tourFromDate)} → ${FleetDB.fmtDate(b.tourToDate)}`;
   const E = FleetDB.escapeHtml;
   document.getElementById('billSummary').innerHTML =
-    `<strong>${E(b.customerName)}</strong> &nbsp;·&nbsp; ${E(detail)} &nbsp;·&nbsp; ${b.requestedDate}`;
+    `<strong>${E(b.customerName)}</strong> &nbsp;·&nbsp; ${E(detail)} &nbsp;·&nbsp; ${FleetDB.fmtDate(b.requestedDate)}`;
 
   // Build unique vehicle list (count duplicates)
   const qtys = {};
@@ -939,7 +1071,7 @@ function submitBill() {
         status:     'completed',
         notes:      notes || (b.serviceType === 'pick_drop'
                       ? `${b.fromLocation || ''} → ${b.toLocation || ''}`
-                      : `Tour ${b.tourFromDate || ''} → ${b.tourToDate || ''}`),
+                      : `Duty ${FleetDB.fmtDate(b.tourFromDate)} → ${FleetDB.fmtDate(b.tourToDate)}`),
         bookingId:  bkId,
       });
       tripIds.push(trip.id);
@@ -951,8 +1083,13 @@ function submitBill() {
     return;
   }
 
-  // Mark booking completed and link trip IDs
-  FleetDB.updateBooking(bkId, { status: 'completed', tripIds });
+  // Mark booking completed, link trip IDs, and save guard info
+  FleetDB.updateBooking(bkId, {
+    status: 'completed',
+    tripIds,
+    guard: document.getElementById('billGuard').checked,
+    guardCost: parseFloat(document.getElementById('billGuardCost').value) || 0,
+  });
 
   FleetDB.closeModal('billModal');
   FleetDB.showToast('✓ ' + tripIds.length + ' duty record' + (tripIds.length !== 1 ? 's' : '') + ' created — ' + tripIds.join(', '));
@@ -978,8 +1115,7 @@ function renderInvoices() {
 
   let bks = FleetDB.getBookings()
     .filter(b => b.status === 'completed')
-    .sort((a, b) =>
-      ((a.requestedDate || '') + (a.createdAt || '')).localeCompare((b.requestedDate || '') + (b.createdAt || '')));
+    .sort((a, b) => arrivalKey(b) - arrivalKey(a));   // newest on top
 
   if (mf) bks = bks.filter(b => (b.requestedDate || '').startsWith(mf));
   if (q)  bks = bks.filter(b =>
@@ -988,6 +1124,7 @@ function renderInvoices() {
     (b.customerPhone || '').toLowerCase().includes(q)
   );
 
+  lastInvoices = bks;
   document.getElementById('invCount').textContent = bks.length;
 
   if (!bks.length) {
@@ -1010,12 +1147,13 @@ function renderInvoices() {
     }).join(', ');
     const driverStr = bookingDriverNames(b, trips, vehicles, drivers);
 
-    // Plane-ticket style origin → destination block
-    const isPD   = b.serviceType === 'pick_drop';
-    const fromTxt = isPD ? (b.fromLocation || '—') : (b.tourFromDate || '—');
-    const toTxt   = isPD ? (b.toLocation   || '—') : (b.tourToDate   || '—');
-    const fromLbl = isPD ? 'Pickup'    : 'Start';
-    const toLbl   = isPD ? 'Drop-off'  : 'End';
+    // Plane-ticket style origin → destination block — prefer the route (locations),
+    // fall back to dates only when no route was entered.
+    const hasRoute = b.fromLocation || b.toLocation;
+    const fromTxt = hasRoute ? (b.fromLocation || '—') : FleetDB.fmtDate(b.tourFromDate || b.requestedDate);
+    const toTxt   = hasRoute ? (b.toLocation   || '—') : FleetDB.fmtDate(b.tourToDate   || b.requestedDate);
+    const fromLbl = hasRoute ? (b.serviceType === 'pick_drop' ? 'Pickup' : 'From') : 'Start';
+    const toLbl   = hasRoute ? (b.serviceType === 'pick_drop' ? 'Drop-off' : 'To') : 'End';
 
     return `<div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 20px;margin-bottom:8px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
       <div style="flex:1;min-width:150px;">
@@ -1044,7 +1182,7 @@ function renderInvoices() {
         <div>🚗 <strong>${E(vehStr || '—')}</strong></div>
         <div>👤 <strong>${E(driverStr)}</strong></div>
         <div>🎯 <strong style="color:var(--accent);">${b.purpose ? E(PURPOSE_LABEL[b.purpose] || b.purpose) : '—'}</strong></div>
-        <div style="color:var(--text-muted);">📅 ${b.requestedDate || '—'}</div>
+        <div style="color:var(--text-muted);">📅 ${FleetDB.fmtDate(b.requestedDate)}</div>
       </div>
 
       <div style="text-align:right;min-width:100px;">
@@ -1209,18 +1347,38 @@ function buildCashbookEntries() {
   const drivers  = FleetDB.getDrivers();
   const entries  = [];
 
-  // IN — completed bookings (customer invoices)
-  FleetDB.getBookings().filter(b => b.status === 'completed').forEach(b => {
-    const amt = bookingGrossAmt(b, allTrips);
+  const tsOf = (r, dateStr) => r.createdTs || (dateStr ? Date.parse(dateStr) : 0) || 0;
+
+  const allBookings = FleetDB.getBookings();
+
+  // IN — completed bookings (customer invoices). File under the BILLING date/time.
+  // Count only the REMAINING (gross − advance) here, since any advance was already
+  // recorded as money-in on the day it was taken (below).
+  allBookings.filter(b => b.status === 'completed').forEach(b => {
+    const trips = allTrips.filter(t => t.bookingId === b.id);
+    const gross = trips.length ? trips.reduce((s, t) => s + (t.gross || 0), 0) : (parseFloat(b.gross) || 0);
+    const amt = Math.max(0, gross - (parseFloat(b.advancePaid) || 0));
     if (!amt) return;
-    entries.push({ date: b.requestedDate || b.createdAt || '', dir: 'in', icon: '🟢',
+    const billDate = trips.length ? trips.map(t => t.date || '').sort().pop() : (b.requestedDate || b.createdAt || '');
+    const billTs   = trips.length ? Math.max.apply(null, trips.map(t => t.createdTs || (t.date ? Date.parse(t.date) : 0) || 0))
+                                   : tsOf(b, b.requestedDate || b.createdAt || '');
+    entries.push({ date: billDate, ts: billTs, dir: 'in', icon: '🟢',
       kind: 'Invoice', desc: (b.customerName || 'Customer') + ' · ' + b.id, amount: amt, manual: false });
+  });
+
+  // IN — customer advances (received when the booking was made), any non-cancelled booking
+  allBookings.filter(b => b.status !== 'cancelled' && (parseFloat(b.advancePaid) || 0) > 0).forEach(b => {
+    const d = b.createdAt || b.requestedDate || '';
+    entries.push({ date: d, ts: b.createdTs || tsOf(b, d), dir: 'in', icon: '🟢',
+      kind: 'Advance In', desc: 'Advance · ' + (b.customerName || 'Customer') + ' · ' + b.id,
+      amount: parseFloat(b.advancePaid) || 0, manual: false });
   });
 
   // OUT — vendor payouts
   FleetDB.getPayouts().forEach(p => {
     const v = vendors.find(x => x.id === p.vendorId);
-    entries.push({ date: p.date || p.createdAt || '', dir: 'out', icon: '🔴',
+    const d = p.date || p.createdAt || '';
+    entries.push({ date: d, ts: tsOf(p, d), dir: 'out', icon: '🔴',
       kind: 'Payout', desc: 'Vendor: ' + (v ? v.name : (p.vendorId || '—')) + (p.method ? ' · ' + p.method : ''),
       amount: p.amount || 0, manual: false });
   });
@@ -1228,7 +1386,8 @@ function buildCashbookEntries() {
   // OUT — driver salaries
   FleetDB.getSalaryPayments().forEach(s => {
     const d = drivers.find(x => x.id === s.driverId);
-    entries.push({ date: s.paidDate || s.createdAt || '', dir: 'out', icon: '🔴',
+    const dt = s.paidDate || s.createdAt || '';
+    entries.push({ date: dt, ts: tsOf(s, dt), dir: 'out', icon: '🔴',
       kind: 'Salary', desc: 'Salary: ' + (d ? d.name : '—') + (s.month ? ' · ' + s.month : ''),
       amount: s.amount || 0, manual: false });
   });
@@ -1236,30 +1395,47 @@ function buildCashbookEntries() {
   // OUT — driver advances
   FleetDB.getAdvances().forEach(a => {
     const d = drivers.find(x => x.id === a.driverId);
-    entries.push({ date: a.date || a.createdAt || '', dir: 'out', icon: '🔴',
+    const dt = a.date || a.createdAt || '';
+    entries.push({ date: dt, ts: tsOf(a, dt), dir: 'out', icon: '🔴',
       kind: 'Advance', desc: 'Advance: ' + (d ? d.name : '—') + (a.reason ? ' · ' + a.reason : ''),
       amount: a.amount || 0, manual: false });
   });
 
   // OUT — expenses
   FleetDB.getExpenses().forEach(e => {
-    entries.push({ date: e.date || e.createdAt || '', dir: 'out', icon: '🔴',
+    const d = e.date || e.createdAt || '';
+    entries.push({ date: d, ts: tsOf(e, d), dir: 'out', icon: '🔴',
       kind: 'Expense', desc: e.description || (FleetDB.EXP_CATS[e.category] || e.category || 'Expense'),
       amount: e.amount || 0, manual: false });
   });
 
   // Manual cash entries (owner-added)
   FleetDB.getCashEntries().forEach(c => {
-    entries.push({ date: c.date || c.createdAt || '', dir: c.type === 'out' ? 'out' : 'in',
+    const d = c.date || c.createdAt || '';
+    entries.push({ date: d, ts: tsOf(c, d), dir: c.type === 'out' ? 'out' : 'in',
       icon: c.type === 'out' ? '🔴' : '🟢', kind: c.type === 'out' ? 'Cash Out' : 'Cash In',
       desc: c.note || 'Manual entry', amount: c.amount || 0, manual: true, srcId: c.id });
   });
 
-  entries.sort((a, b) => (a.date || '').localeCompare(b.date || '')); // earliest first
+  // Latest transaction (by actual time) on top
+  entries.sort((a, b) => b.ts - a.ts || (b.date || '').localeCompare(a.date || ''));
   return entries;
 }
 
-const CB_BADGE = { Invoice:'badge-green','Cash In':'badge-green', Payout:'badge-amber', Salary:'badge-amber', Advance:'badge-amber', Expense:'badge-red','Cash Out':'badge-red' };
+const CB_BADGE = { Invoice:'badge-green','Advance In':'badge-green','Cash In':'badge-green', Payout:'badge-amber', Salary:'badge-amber', Advance:'badge-amber', Expense:'badge-red','Cash Out':'badge-red' };
+
+function cbInPeriod(dateStr) {
+  const p = document.getElementById('cbPeriod').value;
+  if (!p || !dateStr) return !p;
+  const today = FleetDB.today();
+  if (p === 'today') return dateStr === today;
+  if (p === 'month') return dateStr.startsWith(today.slice(0, 7));
+  const d = new Date(today + 'T00:00:00');
+  d.setDate(d.getDate() - (parseInt(p, 10) - 1));   // last N days
+  const pad = n => String(n).padStart(2, '0');
+  const cutoff = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  return dateStr >= cutoff && dateStr <= today;
+}
 
 function renderCashbook() {
   const E = FleetDB.escapeHtml;
@@ -1267,12 +1443,14 @@ function renderCashbook() {
   const mf     = document.getElementById('cbMonth').value;
   let entries  = buildCashbookEntries();
   if (mf)     entries = entries.filter(e => (e.date || '').startsWith(mf));
+  entries = entries.filter(e => cbInPeriod(e.date));
   if (filter) entries = entries.filter(e => e.dir === filter);
 
   const totalIn  = entries.filter(e => e.dir === 'in').reduce((s, e) => s + e.amount, 0);
   const totalOut = entries.filter(e => e.dir === 'out').reduce((s, e) => s + e.amount, 0);
   const net = totalIn - totalOut;
 
+  lastCashbookEntries = entries;
   document.getElementById('cbCount').textContent = entries.length;
   const stat = (l, v, c) => `<div class="card" style="padding:14px 16px;">
     <div style="font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:6px;">${l}</div>
@@ -1284,7 +1462,7 @@ function renderCashbook() {
     stat('Net Balance',     net,      net >= 0 ? 'var(--accent)' : 'var(--red)');
 
   document.getElementById('cbBody').innerHTML = entries.map(e => `<tr>
-    <td class="td-mono" style="font-size:12px;">${E(e.date || '—')}</td>
+    <td class="td-mono" style="font-size:12px;">${E(FleetDB.fmtDate(e.date))}</td>
     <td><span class="badge ${CB_BADGE[e.kind] || 'badge-muted'}">${e.icon} ${e.kind}</span></td>
     <td style="font-size:12px;color:var(--text-secondary);">${E(e.desc)}</td>
     <td class="td-mono" style="text-align:right;font-size:12px;font-weight:700;color:var(--emerald);">${e.dir === 'in' ? 'PKR ' + e.amount.toLocaleString() : ''}</td>
@@ -1351,7 +1529,7 @@ function downloadCashbook() {
   const bodyRows = entries.length ? entries.map((e, i) => `
     <tr>
       <td class="c">${i + 1}</td>
-      <td class="c">${E(e.date || '—')}</td>
+      <td class="c">${E(FleetDB.fmtDate(e.date))}</td>
       <td class="c">${E(e.kind)}</td>
       <td>${E(e.desc)}</td>
       <td class="r b" style="color:#0a7d52;">${e.dir === 'in' ? e.amount.toLocaleString() : ''}</td>
@@ -1411,15 +1589,20 @@ function downloadCashbook() {
   win.document.close();
 }
 
-function printCustomerInvoice(bkId) {
+/* Shared A4 document builder — used for both the Customer Invoice (completed
+   bookings) and the Booking/Advance Receipt (confirmed bookings with an advance).
+   Same clean letterhead layout; populates Total / Advance / Remaining and a
+   Terms & Conditions block. */
+function buildInvoiceHTML(bkId, heading) {
   const b = FleetDB.getBooking(bkId);
-  if (!b) return;
+  if (!b) return '';
   const s        = FleetDB.getSettings();
   const vehicles = FleetDB.getVehicles();
   const drivers  = FleetDB.getDrivers();
+  const E    = FleetDB.escapeHtml;
+  const fmtD = d => FleetDB.fmtDate(d);
 
-  const qtys = {};
-  (b.vehicleIds || []).forEach(id => { qtys[id] = (qtys[id] || 0) + 1; });
+  const qtys = {}; (b.vehicleIds || []).forEach(id => { qtys[id] = (qtys[id] || 0) + 1; });
   const vehNames = Object.entries(qtys).map(([id, qty]) => {
     const v = vehicles.find(x => x.id === id);
     const nm = v ? (v.plate + (v.make ? ' ' + v.make : '') + (v.model ? ' ' + v.model : '')) : id;
@@ -1428,43 +1611,54 @@ function printCustomerInvoice(bkId) {
 
   const trips = FleetDB.getTrips().filter(t => t.bookingId === bkId);
   const driverNames = bookingDriverNames(b, trips, vehicles, drivers);
-  const gross = trips.length
-    ? trips.reduce((sm, t) => sm + (t.gross || 0), 0)
-    : (parseFloat(b.gross) || 0);
+  const gross = trips.length ? trips.reduce((sm, t) => sm + (t.gross || 0), 0) : (parseFloat(b.gross) || 0);
+  const advance     = parseFloat(b.advancePaid) || 0;
+  // A completed booking has been billed & fully paid → remaining is 0 (PAID).
+  // A confirmed booking (due receipt) still owes gross − advance.
+  const isCompleted = b.status === 'completed';
+  const remaining   = isCompleted ? 0 : Math.max(0, gross - advance);
 
-  const fmtD = d => { if (!d) return '—'; const p = d.split('-'); return p[2]+'-'+p[1]+'-'+p[0].slice(2); };
-  const refNo     = b.id.replace('BK-','') + '/' + (b.requestedDate||'').replace(/-/g,'').slice(4);
-  const bizName   = (s.companyName || s.bizName || 'ROYAL MOTORS & RENT A CAR').toUpperCase();
-  const ntn       = s.cpNtn      || '';
-  const addr      = s.cpAddress  || '';
-  const c1        = s.cpContact1 || '';
-  const c2        = s.cpContact2 || '';
-  const email     = s.cpEmail    || '';
-  const logo      = s.cpLogo     || '';
-  const sig       = s.cpSig      || '';
-  const b1n = s.cpBank1Name||'', b1a = s.cpBank1Acc||'';
-  const b2n = s.cpBank2Name||'', b2a = s.cpBank2Acc||'';
-  const b3n = s.cpBank3Name||'', b3a = s.cpBank3Acc||'';
-  const today     = fmtD(FleetDB.today());
-  const dateFrom  = b.serviceType === 'pick_drop' ? fmtD(b.requestedDate) : fmtD(b.tourFromDate);
-  const dateTo    = b.serviceType === 'pick_drop' ? fmtD(b.requestedDate) : fmtD(b.tourToDate);
-  const fromLoc   = b.fromLocation || '—';
-  const toLoc     = b.toLocation   || '—';
-  const grossFmt  = gross ? 'PKR ' + gross.toLocaleString() + '/-' : '—';
-  // Plane-ticket route: locations for Pick & Drop, dates for Duty/Tour
-  const isPD       = b.serviceType === 'pick_drop';
-  const routeFrom  = isPD ? fromLoc : dateFrom;
-  const routeTo    = isPD ? toLoc   : dateTo;
-  const routeFromL = isPD ? 'PICKUP'   : 'START';
-  const routeToL   = isPD ? 'DROP-OFF' : 'END';
+  const refNo   = b.id.replace('BK-','') + '/' + (b.requestedDate||'').replace(/-/g,'').slice(4);
+  const bizName = (s.companyName || s.bizName || 'ROYAL MOTORS & RENT A CAR').toUpperCase();
+  const ntn = s.cpNtn||'', addr = s.cpAddress||'', c1 = s.cpContact1||'', c2 = s.cpContact2||'',
+        email = s.cpEmail||'', logo = s.cpLogo||'', sig = s.cpSig||'';
+  const b1n=s.cpBank1Name||'',b1a=s.cpBank1Acc||'', b2n=s.cpBank2Name||'',b2a=s.cpBank2Acc||'', b3n=s.cpBank3Name||'',b3a=s.cpBank3Acc||'';
+  const today    = fmtD(FleetDB.today());
+  const dateFrom = b.serviceType === 'pick_drop' ? fmtD(b.requestedDate) : fmtD(b.tourFromDate);
+  const dateTo   = b.serviceType === 'pick_drop' ? fmtD(b.requestedDate) : fmtD(b.tourToDate);
+  const fromLoc  = b.fromLocation || '—';
+  const toLoc    = b.toLocation   || '—';
+  const hasRoute = b.fromLocation || b.toLocation;
+  const routeFrom  = hasRoute ? fromLoc : dateFrom;
+  const routeTo    = hasRoute ? toLoc   : dateTo;
+  const routeFromL = hasRoute ? (b.serviceType === 'pick_drop' ? 'PICKUP' : 'FROM') : 'START';
+  const routeToL   = hasRoute ? (b.serviceType === 'pick_drop' ? 'DROP-OFF' : 'TO') : 'END';
+  const grossFmt = gross ? 'PKR ' + gross.toLocaleString() + '/-' : '—';
+  const advFmt   = advance ? 'PKR ' + advance.toLocaleString() + '/-' : '—';
+  const remFmt   = !gross ? '—' : (isCompleted ? 'PAID ✓' : 'PKR ' + remaining.toLocaleString() + '/-');
+  const remColor = isCompleted ? '#0a7d52' : '#b3261e';
 
   const bankRows = [b1n||b1a?[b1n,b1a]:null, b2n||b2a?[b2n,b2a]:null, b3n||b3a?[b3n,b3a]:null]
     .filter(Boolean)
     .map(([name, acc]) => `<div style="margin-bottom:8px;"><strong>${bizName}</strong><br/>${acc}<br/><em>${name}</em></div>`)
     .join('');
 
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
-<title>Invoice ${b.id}</title>
+  // Terms & Conditions — owner can override in Settings (one per line in cpTerms)
+  const defaultTerms = [
+    "Driver's food, accommodation and daily allowance (TA/DA) are the customer's responsibility.",
+    "Fuel, tolls, parking and any traffic challan / fines are borne by the customer unless agreed otherwise.",
+    "Overtime, extra days, extra mileage or out-of-route travel will be charged separately.",
+    "Advance paid is adjusted against the total and is non-refundable in case of cancellation.",
+    "Any damage to the vehicle during the booking is chargeable to the customer.",
+    "The remaining balance is payable on or before completion of the " + (b.serviceType === 'pick_drop' ? 'trip' : 'duty') + ".",
+  ];
+  const terms = (s.cpTerms && s.cpTerms.trim())
+    ? s.cpTerms.split('\n').map(x => x.trim()).filter(Boolean)
+    : defaultTerms;
+  const termsHtml = '<ol style="margin:3px 0 0 16px;line-height:1.45;">' + terms.map(t => '<li>' + E(t) + '</li>').join('') + '</ol>';
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+<title>${E(heading)} ${b.id}</title>
 <style>
   @page{size:A4;margin:12mm 14mm 14mm 14mm;}
   *{box-sizing:border-box;margin:0;padding:0;}
@@ -1474,6 +1668,7 @@ function printCustomerInvoice(bkId) {
   table.main td,table.main th{border:1px solid #000;padding:5px 7px;font-size:9.5pt;vertical-align:middle;}
   table.main th{background:#ececec;font-weight:bold;text-align:center;}
   .c{text-align:center;} .r{text-align:right;} .b{font-weight:bold;}
+  .terms{border:1px solid #000;padding:8px 10px;margin:10px 0;font-size:8.5pt;color:#222;}
   .bottom{display:flex;gap:20px;margin-top:12px;align-items:flex-start;}
   .banks{flex:1;font-size:9.5pt;line-height:1.8;}
   .sig-box{width:160px;text-align:center;}
@@ -1485,33 +1680,31 @@ function printCustomerInvoice(bkId) {
   <td style="width:80px;border:none;vertical-align:middle;">
     ${logo ? `<img src="${logo}" style="width:72px;height:72px;object-fit:contain;"/>` : '<div style="width:72px;height:72px;border:1px solid #ccc;display:flex;align-items:center;justify-content:center;font-size:28pt;">🏢</div>'}
   </td>
-  <td style="border:none;vertical-align:middle;text-align:center;">
-    <div class="co-title">${bizName}</div>
-  </td>
+  <td style="border:none;vertical-align:middle;text-align:center;"><div class="co-title">${bizName}</div></td>
   <td style="width:60px;border:none;"></td>
 </tr></table>
 <table style="width:100%;margin:6px 0;font-size:10pt;"><tr>
   <td style="border:none;"><strong>Date:</strong> ${today}</td>
-  <td style="border:none;text-align:right;"><strong>Ref. No.</strong>${refNo}${ntn ? '<br/><strong>NTN No.:</strong>' + ntn : ''}</td>
+  <td style="border:none;text-align:right;"><strong>Ref. No.</strong> ${refNo}${ntn ? '<br/><strong>NTN No.:</strong>' + ntn : ''}</td>
 </tr></table>
-<p style="font-weight:bold;font-size:11pt;margin:6px 0 4px;">INVOICE:</p>
+<p style="font-weight:bold;font-size:11pt;margin:6px 0 4px;">${E(heading)}:</p>
 <table class="main">
   <tr>
     <th>Vehicle Name</th><th>Driver Name</th>
     <th>Customer Name</th><th>Fuel &amp; Tolls<br/>Food + Challan</th><th>CONTACT</th>
   </tr>
   <tr>
-    <td class="b">${vehNames}</td><td class="c b">${driverNames}</td>
-    <td class="c b">${b.customerName||'—'}</td><td class="c">Customer</td>
-    <td class="c b">${b.customerPhone||'—'}</td>
+    <td class="b">${E(vehNames)}</td><td class="c b">${E(driverNames)}</td>
+    <td class="c b">${E(b.customerName||'—')}</td><td class="c">Customer</td>
+    <td class="c b">${E(b.customerPhone||'—')}</td>
   </tr>
   <tr>
     <th>Date From</th><th>Date To</th><th>Time From</th><th>Time To</th><th>Purpose</th>
   </tr>
   <tr>
     <td class="c">${dateFrom}</td><td class="c">${dateTo}</td>
-    <td class="c">—</td><td class="c">—</td>
-    <td class="c b">${b.purpose ? (PURPOSE_LABEL[b.purpose] || b.purpose) : '—'}</td>
+    <td class="c">${E(FleetDB.fmtTime(b.timeFrom))}</td><td class="c">${E(FleetDB.fmtTime(b.timeTo))}</td>
+    <td class="c b">${b.purpose ? E(PURPOSE_LABEL[b.purpose] || b.purpose) : '—'}</td>
   </tr>
   <tr>
     <td colspan="5" style="padding:10px 7px;">
@@ -1519,14 +1712,12 @@ function printCustomerInvoice(bkId) {
         <tr>
           <td style="border:none;text-align:right;width:42%;vertical-align:middle;">
             <div style="font-size:7.5pt;letter-spacing:1px;color:#666;">${routeFromL}</div>
-            <div style="font-size:13pt;font-weight:bold;line-height:1.1;">${routeFrom}</div>
+            <div style="font-size:13pt;font-weight:bold;line-height:1.1;">${E(routeFrom)}</div>
           </td>
-          <td style="border:none;text-align:center;width:16%;vertical-align:middle;font-size:14pt;color:#000;">
-            · · · ✈ · · ·
-          </td>
+          <td style="border:none;text-align:center;width:16%;vertical-align:middle;font-size:14pt;color:#000;">· · · ✈ · · ·</td>
           <td style="border:none;text-align:left;width:42%;vertical-align:middle;">
             <div style="font-size:7.5pt;letter-spacing:1px;color:#666;">${routeToL}</div>
-            <div style="font-size:13pt;font-weight:bold;line-height:1.1;">${routeTo}</div>
+            <div style="font-size:13pt;font-weight:bold;line-height:1.1;">${E(routeTo)}</div>
           </td>
         </tr>
       </table>
@@ -1537,34 +1728,44 @@ function printCustomerInvoice(bkId) {
     <td colspan="2" class="c b" style="font-size:12pt;">${grossFmt}</td>
   </tr>
   <tr>
-    <td colspan="3" class="c b">Advance</td>
-    <td colspan="2" class="c">—</td>
+    <td colspan="3" class="c b">Advance Paid</td>
+    <td colspan="2" class="c b" style="color:#0a7d52;">${advFmt}</td>
   </tr>
   <tr>
-    <td colspan="3" class="c b">Remaining Amount</td>
-    <td colspan="2" class="c b" style="font-size:12pt;">${grossFmt}</td>
+    <td colspan="3" class="c b">${isCompleted ? 'Balance' : 'Remaining Amount'}</td>
+    <td colspan="2" class="c b" style="font-size:12pt;color:${remColor};">${remFmt}</td>
   </tr>
 </table>
-<p style="margin:8px 0 14px;font-size:10pt;"><strong>Note :</strong> ${b.notes || ''}</p>
+${b.notes ? `<p style="margin:8px 0 4px;font-size:10pt;"><strong>Note:</strong> ${E(b.notes)}</p>` : ''}
+<div class="terms"><strong style="font-size:9.5pt;">Terms &amp; Conditions:</strong>${termsHtml}</div>
 <div class="bottom">
   <div class="banks">${bankRows || '<em style="color:#999;">No bank accounts configured — add them in Settings.</em>'}</div>
   <div class="sig-box">
     ${sig ? `<img src="${sig}"/>` : '<div style="width:140px;height:70px;border-bottom:1px solid #000;"></div>'}
-    <div style="font-size:10pt;margin-top:4px;font-weight:bold;"></div>
+    <div style="font-size:10pt;margin-top:4px;font-weight:bold;">Authorised Signature</div>
   </div>
 </div>
 <div class="footer">
-  ${addr ? `<strong>ADDRESS:</strong> ${addr}&nbsp;&nbsp;&nbsp;` : ''}
-  ${c1 ? `<strong>Contact No.</strong> ${c1}` : ''}${c2 ? `&nbsp;&nbsp;&nbsp;${c2}` : ''}
-  ${email ? `<br/><strong>Email:</strong> <a href="mailto:${email}">${email}</a>` : ''}
+  ${addr ? `<strong>ADDRESS:</strong> ${E(addr)}&nbsp;&nbsp;&nbsp;` : ''}
+  ${c1 ? `<strong>Contact No.</strong> ${E(c1)}` : ''}${c2 ? `&nbsp;&nbsp;&nbsp;${E(c2)}` : ''}
+  ${email ? `<br/><strong>Email:</strong> ${E(email)}` : ''}
 </div>
 <script>window.onload=()=>{window.print();}<\/script>
 <\/body><\/html>`;
+}
 
+function openInvoiceWindow(html) {
+  if (!html) { FleetDB.showToast('Booking not found', 'error'); return; }
   const win = window.open('', '_blank', 'width=820,height=1000');
   win.document.write(html);
   win.document.close();
 }
+
+// Completed booking → tax invoice
+function printCustomerInvoice(bkId) { openInvoiceWindow(buildInvoiceHTML(bkId, 'INVOICE')); }
+
+// Confirmed booking with an advance → booking / advance receipt (give to customer)
+function printBookingReceipt(bkId)  { openInvoiceWindow(buildInvoiceHTML(bkId, 'BOOKING / ADVANCE RECEIPT')); }
 
 /* ════ START ════ */
 try {

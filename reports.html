@@ -110,7 +110,7 @@ function buildReports() {
   revChart = new Chart(document.getElementById('revenueChart'), {
     type: 'line',
     data: {
-      labels: dayLabels.map(d => d.slice(5)),
+      labels: dayLabels.map(d => { const p = d.split('-'); return p[2] + '/' + p[1]; }),
       datasets: [{ label:'Revenue', data: dayVals, borderColor:'#2A9D8F', backgroundColor:'rgba(42,157,143,0.1)', tension:0.3, fill:true, pointRadius:2 }]
     },
     options: { responsive:true, plugins:{legend:{display:false}}, scales:{
@@ -177,7 +177,7 @@ function exportCSV() {
   const rows = [['Trip ID','Date','Plate','Vendor','Driver','Revenue','Commission','Expenses','Net','Status']];
   trips.forEach(t=>{
     const v=vehicles.find(x=>x.id===t.vehicleId),vn=vendors.find(x=>x.id===t.vendorId),d=drivers.find(x=>x.id===t.driverId);
-    rows.push([t.id,t.date,v?v.plate:'',vn?vn.name:'',d?d.name:'',t.gross,t.commission,t.expenses,t.net,t.status]);
+    rows.push([t.id,FleetDB.fmtDate(t.date),v?v.plate:'',vn?vn.name:'',d?d.name:'',t.gross,t.commission,t.expenses,t.net,t.status]);
   });
   const csv=rows.map(r=>r.join(',')).join('\n');
   const a=document.createElement('a');a.href='data:text/csv,'+encodeURIComponent(csv);a.download='fleet-report.csv';a.click();

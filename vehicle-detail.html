@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Vehicle Detail — Royal Motors</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar" id="topbar"></header>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title" id="vdTitle">Vehicle Detail</div>
+        <div class="page-subtitle"><a href="vehicles.html" style="color:var(--accent);text-decoration:none;">← Back to Vehicles</a></div>
+      </div>
+      <div class="page-actions" id="vdActions"></div>
+    </div>
+
+    <div id="vdMain">
+      <!-- Vehicle info -->
+      <div class="card" style="padding:16px 20px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <div id="vdPhoto" style="width:96px;height:72px;border-radius:8px;background:var(--bg-elevated);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;font-size:30px;">🚗</div>
+        <div style="flex:1;min-width:200px;">
+          <div id="vdPlate" style="font-size:20px;font-weight:700;font-family:var(--mono);"></div>
+          <div id="vdMeta" style="font-size:13px;color:var(--text-muted);"></div>
+        </div>
+        <div id="vdInfo" style="display:flex;gap:22px;flex-wrap:wrap;"></div>
+      </div>
+
+      <div class="grid-4 mb-5" id="vdStats"></div>
+
+      <!-- Filters -->
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+        <div class="topbar-search" style="width:240px;">
+          <span class="search-icon">⌕</span>
+          <input type="text" placeholder="Customer, route, driver…" id="vdSearch" aria-label="Search"/>
+        </div>
+        <select class="form-select" style="width:150px;height:34px;" id="vdType" onchange="render()">
+          <option value="">All types</option>
+          <option value="pick_drop">Pick &amp; Drop</option>
+          <option value="tour">Duty</option>
+        </select>
+        <select class="form-select" style="width:150px;height:34px;" id="vdPeriod" onchange="render()">
+          <option value="">All time</option>
+          <option value="today">Today</option>
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="month">This month</option>
+        </select>
+        <input type="month" class="form-input" style="height:34px;width:150px;" id="vdMonth" onchange="render()" title="Pick a specific month"/>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('vdMonth').value='';document.getElementById('vdPeriod').value='';render()">Clear</button>
+        <div style="margin-left:auto;font-size:13px;color:var(--text-secondary);">
+          <span id="vdCount" style="font-weight:600;color:var(--text-primary);">—</span> trips
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Date</th><th>Customer</th><th>Type</th><th>Route / Dates</th><th>Driver</th>
+            <th style="text-align:right;">Revenue</th><th style="text-align:right;">Commission</th>
+            <th style="text-align:right;">Vendor Net</th><th>Status</th>
+          </tr></thead>
+          <tbody id="vdBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+<nav class="mobile-nav" id="mobileNav"></nav>
+
+<!-- Firebase (cloud sync + auth) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-sync.js"></script>
+<script src="data.js"></script>
+<script>
+FleetDB.init('vehicles.html');   // keep Vehicles highlighted in the sidebar
+const params    = new URLSearchParams(location.search);
+const vehicleId = params.get('v');
+const E     = s => FleetDB.escapeHtml(s == null ? '' : s);
+const money = n => 'PKR ' + (n || 0).toLocaleString();
+const SVC_ICON  = { pick_drop:'🛞', tour:'🌍' };
+const SVC_LABEL = { pick_drop:'Pick & Drop', tour:'Duty' };
+
+function routeStr(from, to) { return (!from && !to) ? '—' : (from || '—') + ' → ' + (to || '—'); }
+
+// Build all trip rows for this vehicle, with type/route resolved from the linked booking
+function buildRows() {
+  const customers = FleetDB.getCustomers();
+  const drivers   = FleetDB.getDrivers();
+  const bookings  = FleetDB.getBookings();
+  const bkById    = {}; bookings.forEach(b => { bkById[b.id] = b; });
+
+  return FleetDB.getTrips()
+    .filter(t => t.vehicleId === vehicleId && t.status !== 'cancelled')
+    .map(t => {
+      const bk = t.bookingId ? bkById[t.bookingId] : null;
+      const cu = customers.find(x => x.id === t.customerId);
+      const dr = drivers.find(x => x.id === t.driverId);
+      const type = bk ? bk.serviceType : '';
+      const route = bk
+        ? (bk.fromLocation || bk.toLocation
+            ? routeStr(bk.fromLocation, bk.toLocation)
+            : routeStr(FleetDB.fmtDate(bk.tourFromDate), FleetDB.fmtDate(bk.tourToDate)))
+        : (t.notes || '—');
+      return {
+        ts: t.createdTs || (t.date ? Date.parse(t.date) : 0) || 0,
+        date: t.date || '', customer: cu ? cu.name : 'Walk-in', driver: dr ? dr.name : '—',
+        type, route, gross: t.gross || 0, commission: t.commission || 0, net: t.net || 0,
+        status: t.status || 'completed', bookingId: t.bookingId || '',
+      };
+    })
+    .sort((a, b) => b.ts - a.ts);   // newest first
+}
+
+function inPeriod(dateStr) {
+  const p = document.getElementById('vdPeriod').value;
+  const mf = document.getElementById('vdMonth').value;
+  if (mf && !(dateStr || '').startsWith(mf)) return false;
+  if (!p) return true;
+  if (!dateStr) return false;
+  const today = FleetDB.today();
+  if (p === 'today') return dateStr === today;
+  if (p === 'month') return dateStr.startsWith(today.slice(0, 7));
+  const d = new Date(today + 'T00:00:00');
+  d.setDate(d.getDate() - (parseInt(p, 10) - 1));
+  const pad = n => String(n).padStart(2, '0');
+  const cutoff = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  return dateStr >= cutoff && dateStr <= today;
+}
+
+const ST_BADGE = { completed:'badge-green', pending:'badge-amber', cancelled:'badge-red' };
+let lastRows = [];
+
+function render() {
+  const v = FleetDB.getVehicle(vehicleId);
+  if (!v) {
+    document.getElementById('vdMain').innerHTML =
+      '<div class="card" style="padding:48px;text-align:center;color:var(--text-muted);">Vehicle not found. <a href="vehicles.html" style="color:var(--accent);">← Back to Vehicles</a></div>';
+    return;
+  }
+  const vendor = FleetDB.getVendor(v.vendorId);
+  const driver = v.driverId ? FleetDB.getDriver(v.driverId) : null;
+  const makeModel = [v.make, v.model].filter(Boolean).join(' ') || '—';
+
+  document.title = v.plate + ' — Vehicle Detail';
+  document.getElementById('vdTitle').textContent = v.plate;
+  document.getElementById('vdPlate').textContent = v.plate;
+  document.getElementById('vdMeta').textContent = makeModel + (v.year ? ' · ' + v.year : '') + (v.category ? ' · ' + v.category : '');
+  document.getElementById('vdPhoto').innerHTML = v.photo
+    ? `<img src="${v.photo}" style="width:100%;height:100%;object-fit:cover;"/>` : '🚗';
+
+  document.getElementById('vdInfo').innerHTML = [
+    ['Vendor',  vendor ? vendor.name : '—'],
+    ['Driver',  driver ? driver.name : 'Unassigned'],
+    ['Status',  v.status || '—'],
+  ].map(([l, val]) => `<div>
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);">${l}</div>
+    <div style="font-size:14px;font-weight:600;">${E(val)}</div>
+  </div>`).join('');
+
+  // All-time stat tiles
+  const allRows = buildRows();
+  const tRev = allRows.reduce((s, r) => s + r.gross, 0);
+  const tComm = allRows.reduce((s, r) => s + r.commission, 0);
+  const tNet = allRows.reduce((s, r) => s + r.net, 0);
+  document.getElementById('vdStats').innerHTML = [
+    ['Total Trips',   allRows.length,  ''],
+    ['Total Revenue', money(tRev),     'color:var(--accent)'],
+    ['Commission',    money(tComm),    'color:var(--amber)'],
+    ['Vendor Net',    money(tNet),     'color:var(--emerald)'],
+  ].map(([l, val, s]) => `<div class="card" style="padding:14px;">
+    <div style="font-size:10px;color:var(--text-muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:5px;">${l}</div>
+    <div style="font-size:20px;font-weight:700;${s}">${val}</div>
+  </div>`).join('');
+
+  document.getElementById('vdActions').innerHTML =
+    `<button class="btn btn-secondary" onclick="exportRows()">⬇ Export CSV</button>`
+    + `<button class="btn btn-secondary" onclick="printReport()">🖨 Print</button>`;
+
+  // Filtered rows
+  const q  = (document.getElementById('vdSearch').value || '').toLowerCase();
+  const tf = document.getElementById('vdType').value;
+  let rows = allRows.filter(r => inPeriod(r.date));
+  if (tf) rows = rows.filter(r => r.type === tf);
+  if (q)  rows = rows.filter(r =>
+    (r.customer || '').toLowerCase().includes(q) ||
+    (r.route    || '').toLowerCase().includes(q) ||
+    (r.driver   || '').toLowerCase().includes(q));
+  lastRows = rows;
+  document.getElementById('vdCount').textContent = rows.length;
+
+  const sRev = rows.reduce((s, r) => s + r.gross, 0);
+  const sNet = rows.reduce((s, r) => s + r.net, 0);
+
+  document.getElementById('vdBody').innerHTML = rows.map(r => `<tr>
+    <td class="td-mono" style="font-size:12px;">${FleetDB.fmtDate(r.date)}</td>
+    <td style="font-size:12px;">${E(r.customer)}</td>
+    <td style="font-size:12px;white-space:nowrap;">${SVC_ICON[r.type] || ''} ${SVC_LABEL[r.type] || '—'}</td>
+    <td style="font-size:12px;color:var(--text-secondary);">${E(r.route)}</td>
+    <td style="font-size:12px;">${E(r.driver)}</td>
+    <td style="text-align:right;" class="td-mono">${money(r.gross)}</td>
+    <td style="text-align:right;color:var(--amber);" class="td-mono">${r.commission ? money(r.commission) : '—'}</td>
+    <td style="text-align:right;font-weight:700;color:var(--accent);" class="td-mono">${money(r.net)}</td>
+    <td><span class="badge ${ST_BADGE[r.status] || 'badge-muted'}">${E(r.status)}</span></td>
+  </tr>`).join('') || '<tr><td colspan="9" style="text-align:center;padding:28px;color:var(--text-muted);">No trips found for this period</td></tr>';
+  if (rows.length) {
+    document.getElementById('vdBody').innerHTML += `<tr style="font-weight:700;background:var(--bg-elevated);">
+      <td colspan="5">Total (${rows.length} trip${rows.length !== 1 ? 's' : ''})</td>
+      <td style="text-align:right;" class="td-mono">${money(sRev)}</td>
+      <td></td>
+      <td style="text-align:right;color:var(--accent);" class="td-mono">${money(sNet)}</td>
+      <td></td>
+    </tr>`;
+  }
+}
+
+function exportRows() {
+  if (!lastRows.length) { FleetDB.showToast('No trips to export', 'error'); return; }
+  const esc = v => { const s = (v == null ? '' : String(v)); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const rows = [['Date','Customer','Type','Route / Dates','Driver','Revenue','Commission','Vendor Net','Status']];
+  lastRows.forEach(r => rows.push([FleetDB.fmtDate(r.date), r.customer, SVC_LABEL[r.type] || '', r.route, r.driver, r.gross, r.commission, r.net, r.status]));
+  const csv = rows.map(r => r.map(esc).join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  const v = FleetDB.getVehicle(vehicleId);
+  a.href = URL.createObjectURL(blob); a.download = 'vehicle_' + (v ? v.plate : vehicleId) + '_' + FleetDB.today() + '.csv';
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+  FleetDB.showToast('Exported ' + lastRows.length + ' trips');
+}
+
+function printReport() {
+  const v = FleetDB.getVehicle(vehicleId);
+  if (!v) return;
+  const s = FleetDB.getSettings();
+  const vendor = FleetDB.getVendor(v.vendorId);
+  const rows = lastRows;
+  const tRev = rows.reduce((sm, r) => sm + r.gross, 0);
+  const tNet = rows.reduce((sm, r) => sm + r.net, 0);
+  const bizName = (s.companyName || s.bizName || 'ROYAL MOTORS & RENT A CAR').toUpperCase();
+  const logo = s.cpLogo || '';
+
+  const body = rows.length ? rows.map((r, i) => `
+    <tr><td class="c">${i + 1}</td><td class="c">${E(FleetDB.fmtDate(r.date))}</td><td>${E(r.customer)}</td>
+    <td class="c">${E(SVC_LABEL[r.type] || '—')}</td><td>${E(r.route)}</td><td>${E(r.driver)}</td>
+    <td class="r b">${r.gross.toLocaleString()}</td><td class="r">${r.net.toLocaleString()}</td></tr>`).join('')
+    : '<tr><td colspan="8" class="c" style="padding:16px;color:#777;">No trips.</td></tr>';
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+<title>Vehicle Report — ${E(v.plate)}</title>
+<style>
+  @page{size:A4 landscape;margin:12mm;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#000;}
+  .co-title{font-size:18pt;font-weight:bold;text-align:center;text-decoration:underline;letter-spacing:1px;}
+  .sub{text-align:center;font-size:11pt;font-weight:bold;margin:4px 0;letter-spacing:1px;color:#333;}
+  .meta{text-align:center;font-size:9.5pt;color:#555;margin-bottom:10px;}
+  table.rec{border-collapse:collapse;width:100%;}
+  table.rec th,table.rec td{border:1px solid #000;padding:5px 7px;font-size:9pt;vertical-align:top;}
+  table.rec th{background:#ececec;font-weight:bold;text-align:center;}
+  .c{text-align:center;} .r{text-align:right;} .b{font-weight:bold;}
+  tr.total td{background:#f4f4f4;font-weight:bold;}
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style></head><body>
+<table style="width:100%;margin-bottom:4px;"><tr>
+  <td style="width:80px;border:none;">${logo ? `<img src="${logo}" style="width:64px;height:64px;object-fit:contain;"/>` : ''}</td>
+  <td style="border:none;text-align:center;"><div class="co-title">${E(bizName)}</div></td>
+  <td style="width:64px;border:none;"></td>
+</tr></table>
+<div class="sub">VEHICLE REPORT — ${E(v.plate)}</div>
+<div class="meta">${E([v.make, v.model].filter(Boolean).join(' '))}${v.year ? ' · ' + v.year : ''} &nbsp;|&nbsp; Vendor: ${E(vendor ? vendor.name : '—')} &nbsp;|&nbsp; Generated ${E(FleetDB.nowPKT())}</div>
+<table class="rec">
+  <tr><th style="width:24px;">#</th><th>Date</th><th>Customer</th><th>Type</th><th>Route / Dates</th><th>Driver</th><th>Revenue</th><th>Vendor Net</th></tr>
+  ${body}
+  <tr class="total"><td colspan="6" class="r">TOTALS (${rows.length} trips)</td><td class="r">${tRev.toLocaleString()}</td><td class="r">${tNet.toLocaleString()}</td></tr>
+</table>
+<script>window.onload=()=>{window.print();}<\/script>
+<\/body><\/html>`;
+  const win = window.open('', '_blank', 'width=1000,height=800');
+  win.document.write(html);
+  win.document.close();
+}
+
+document.getElementById('vdSearch').oninput = FleetDB.debounce(() => render(), 250);
+render();
+</script>
+</body>
+</html>

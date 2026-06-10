@@ -310,7 +310,7 @@ function renderExpenses() {
   document.getElementById('expBody').innerHTML = exps.length
     ? exps.map(e => `<tr>
         <td class="td-mono" style="font-size:11px;color:var(--text-muted);">${e.id}</td>
-        <td class="td-mono" style="font-size:12px;">${e.date}</td>
+        <td class="td-mono" style="font-size:12px;">${FleetDB.fmtDate(e.date)}</td>
         <td style="font-size:12px;">${CATS[e.category]||e.category}</td>
         <td style="font-size:13px;font-weight:500;">${FleetDB.escapeHtml(e.description)}${e.notes?'<div style="font-size:11px;color:var(--text-muted);">'+FleetDB.escapeHtml(e.notes)+'</div>':''}</td>
         <td class="td-amount negative" style="font-weight:700;">PKR ${(e.amount||0).toLocaleString()}</td>

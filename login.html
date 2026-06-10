@@ -33,6 +33,19 @@
       <button type="submit" class="btn btn-primary" style="width:100%;height:40px;font-size:14px;margin-top:8px;">Sign In</button>
     </form>
 
+    <!-- Employee passcode login -->
+    <div style="margin-top:18px;text-align:center;">
+      <a href="#" onclick="toggleEmp(event)" style="font-size:12px;color:var(--accent);text-decoration:none;">👤 Employee login</a>
+    </div>
+    <div id="empBox" style="display:none;margin-top:12px;">
+      <div class="form-group">
+        <label class="form-label">Employee Passcode</label>
+        <input type="password" class="form-input" id="empPass" placeholder="••••" autocomplete="off"/>
+      </div>
+      <button type="button" class="btn btn-secondary" style="width:100%;height:38px;" onclick="empLogin()">Enter as Employee</button>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:center;">Set by the owner in Settings → Staff Access.</div>
+    </div>
+
     <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);text-align:center;font-size:11px;color:var(--text-muted);">
       Royal Motors Transport Management · v2.0
     </div>
@@ -76,6 +89,7 @@ function doLogin(e) {
   window.fbAuth.signInWithEmailAndPassword(email, pass)
     .then(async (cred) => {
       sessionStorage.setItem('fo_auth', '1');
+      sessionStorage.setItem('fo_role', 'owner');   // the Firebase account holder is the owner
       // Pull this user's cloud data before entering the app.
       try {
         const pulled = await FleetSync.pull(cred.user.uid);
@@ -107,6 +121,37 @@ function friendlyAuthError(error) {
 function togglePwd() {
   const inp = document.getElementById('loginPass');
   inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+function toggleEmp(e) {
+  e.preventDefault();
+  const box = document.getElementById('empBox');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+  if (box.style.display === 'block') document.getElementById('empPass').focus();
+}
+
+// Employee passcode login — reuses the shop's data already on this device.
+function empLogin() {
+  const err = document.getElementById('loginError');
+  let settings = {};
+  try { settings = JSON.parse(localStorage.getItem('fo_settings')) || {}; } catch (e) {}
+  const code = (settings.empPasscode || '').trim();
+
+  if (!code) {
+    err.textContent = 'No employee access set up yet. The owner must sign in and set an Employee Passcode in Settings on this device first.';
+    err.style.display = 'block'; return;
+  }
+  const entered = document.getElementById('empPass').value.trim();
+  if (entered && entered === code) {
+    sessionStorage.setItem('fo_auth', '1');
+    sessionStorage.setItem('fo_role', 'employee');
+    location.href = 'dispatch.html';
+  } else {
+    err.textContent = 'Incorrect employee passcode.';
+    err.style.display = 'block';
+    document.getElementById('empPass').value = '';
+    setTimeout(() => { err.style.display = 'none'; }, 4000);
+  }
 }
 </script>
 </body>

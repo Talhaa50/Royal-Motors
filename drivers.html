@@ -20,6 +20,12 @@
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
         </select>
+        <select class="form-select" style="width:170px;height:34px;" id="newF" onchange="driverPage=0;renderDrivers()">
+          <option value="">All Drivers</option>
+          <option value="7">🆕 New — last 7 days</option>
+          <option value="30">🆕 New — last 30 days</option>
+        </select>
+        <button class="btn btn-secondary" onclick="exportDrivers()">⬇ Export CSV</button>
         <button class="btn btn-primary" id="addDriverBtn">+ Add Driver</button>
       </div>
     </div>
@@ -166,6 +172,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script src="firebase-sync.js"></script>
 <script src="data.js"></script>
@@ -173,23 +180,54 @@
 FleetDB.init('drivers.html');
 const PAGE_SIZE = 50;
 let driverPage = 0;
+let lastDriverList = [];
 function gotoDriverPage(p) { driverPage = p; renderDrivers(); }
 
 document.getElementById('addDriverBtn').onclick = function() {
   clearForm(); FleetDB.openModal('driverModal');
 };
 
+/* ── CSV export ── */
+function downloadCSV(filename, rows) {
+  const esc = v => { const s = (v == null ? '' : String(v)); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const csv = rows.map(r => r.map(esc).join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+}
+function exportDrivers() {
+  const list = lastDriverList.length ? lastDriverList : FleetDB.getDrivers();
+  if (!list.length) { FleetDB.showToast('No drivers to export', 'error'); return; }
+  const vehicles = FleetDB.getVehicles();
+  const trips = FleetDB.getTrips().filter(t => t.status !== 'cancelled');
+  const rows = [['Driver ID','Name','Phone','CNIC','License','Assigned Vehicle','Salary','Status','Joined','Trips']];
+  list.forEach(d => {
+    const veh = vehicles.find(v => v.driverId === d.id);
+    const tc  = trips.filter(t => t.driverId === d.id).length;
+    rows.push([d.id, d.name, d.phone || '', d.cnic || '', d.license || '', veh ? veh.plate : '', d.salary || 0, d.status || '', FleetDB.fmtDate(d.createdAt), tc]);
+  });
+  downloadCSV('drivers_' + FleetDB.today() + '.csv', rows);
+  FleetDB.showToast('Exported ' + list.length + ' drivers');
+}
+
 function renderDrivers() {
   const q  = (document.getElementById('dSearch').value||'').toLowerCase();
   const sf = document.getElementById('statusF').value;
+  const nf = document.getElementById('newF').value;   // '', '7', '30'
+  const cutoff = nf ? Date.now() - parseInt(nf, 10) * 86400000 : 0;
   const vehicles = FleetDB.getVehicles();
   const trips    = FleetDB.getTrips().filter(t => t.status !== 'cancelled');
 
-  const all = FleetDB.getDrivers().filter(d => {
+  let all = FleetDB.getDrivers().filter(d => {
     const matchQ = !q || d.name.toLowerCase().includes(q) ||
       (d.phone||'').toLowerCase().includes(q) || (d.cnic||'').toLowerCase().includes(q);
-    return matchQ && (!sf || d.status === sf);
+    const ts = d.createdTs || (d.createdAt ? Date.parse(d.createdAt) : 0) || 0;
+    return matchQ && (!sf || d.status === sf) && (!nf || ts >= cutoff);
   });
+  // Newest drivers first
+  all = all.sort((a, b) => ((b.createdTs || (b.createdAt ? Date.parse(b.createdAt) : 0) || 0) - (a.createdTs || (a.createdAt ? Date.parse(a.createdAt) : 0) || 0)));
+  lastDriverList = all;
 
   const active = FleetDB.getDrivers().filter(d => d.status === 'active').length;
   const totSalary = FleetDB.getDrivers().filter(d=>d.status==='active').reduce((s,d)=>s+(d.salary||0),0);
@@ -222,7 +260,7 @@ function renderDrivers() {
       <td class="td-amount">${d.salary ? FleetDB.fmtMoney(d.salary) : '—'}</td>
       <td><span class="badge ${d.status==='active'?'badge-green':'badge-muted'}">${E(d.status)}</span></td>
       <td style="text-align:right;" class="td-mono">${dTrips.length}</td>
-      <td onclick="event.stopPropagation()"><div style="display:flex;gap:5px;"><button class="btn btn-secondary btn-sm" onclick="editDriver('${d.id}')">Edit</button><button class="btn btn-sm" style="color:var(--red);border:1px solid rgba(239,68,68,.2);" onclick="deleteDriverConfirm('${d.id}')">Del</button></div></td>
+      <td onclick="event.stopPropagation()"><div style="display:flex;gap:5px;"><button class="btn btn-secondary btn-sm" onclick="editDriver('${d.id}')">Edit</button>${FleetDB.getRole()==='owner' ? `<button class="btn btn-sm" style="color:var(--red);border:1px solid rgba(239,68,68,.2);" onclick="deleteDriverConfirm('${d.id}')">Del</button>` : ''}</div></td>
     </tr>`;
   }).join('') || '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-muted);">No drivers found</td></tr>';
   document.getElementById('dPager').innerHTML = FleetDB.pagerHTML(all.length, driverPage, PAGE_SIZE, 'gotoDriverPage');
@@ -280,15 +318,18 @@ function clearForm() {
 }
 
 /* ── Driver photo upload (base64, like vehicle photos) ── */
-function previewDriverPhoto(input) {
+async function previewDriverPhoto(input) {
   const file = input.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    document.getElementById('dPhoto').value = e.target.result;
-    setDriverPhotoPreview(e.target.result);
-  };
-  reader.readAsDataURL(file);
+  try {
+    const dataUrl = await ImageStore.compress(file);
+    document.getElementById('dPhoto').value = dataUrl;
+    setDriverPhotoPreview(dataUrl);
+    FleetDB.showToast('Uploading photo…');
+    const url = await ImageStore.upload(dataUrl, 'drivers');
+    document.getElementById('dPhoto').value = url;
+    setDriverPhotoPreview(url);
+  } catch (e) { FleetDB.showToast('Could not process image', 'error'); }
 }
 function setDriverPhotoPreview(src) {
   const el = document.getElementById('dPhotoPreview');
@@ -366,7 +407,7 @@ function openDriverRecord(id) {
     ['Phone',          d.phone   || '—'],
     ['CNIC',           d.cnic    || '—'],
     ['License',        d.license || '—'],
-    ['Joined',         d.createdAt || '—'],
+    ['Joined',         FleetDB.fmtDate(d.createdAt)],
     ['Monthly Salary', d.salary ? FleetDB.fmtMoney(d.salary) : '—'],
     ['Assigned',       vehicle ? vehicle.plate : '—'],
     ['Status',         d.status || 'active'],
@@ -395,7 +436,7 @@ function openDriverRecord(id) {
   const typeBadge = { Salary: 'badge-teal', Advance: 'badge-amber' };
   const stBadge   = { paid: 'badge-green', pending: 'badge-amber', settled: 'badge-muted' };
   document.getElementById('drLedger').innerHTML = ledger.map(r => `<tr>
-    <td class="td-mono" style="font-size:12px;">${E(r.date || '—')}</td>
+    <td class="td-mono" style="font-size:12px;">${E(FleetDB.fmtDate(r.date))}</td>
     <td><span class="badge ${typeBadge[r.kind] || 'badge-muted'}">${r.kind}</span></td>
     <td class="td-mono" style="font-size:12px;font-weight:700;text-align:right;color:${r.kind === 'Advance' ? 'var(--amber)' : 'var(--accent)'};">PKR ${r.amount.toLocaleString()}</td>
     <td style="font-size:12px;color:var(--text-secondary);">${E(r.detail || '—')}</td>
@@ -428,7 +469,7 @@ function downloadDriverRecord() {
   const bodyRows = ledger.length ? ledger.map((r, i) => `
     <tr>
       <td class="c">${i + 1}</td>
-      <td class="c">${E(r.date || '—')}</td>
+      <td class="c">${E(FleetDB.fmtDate(r.date))}</td>
       <td class="c b">${r.kind}</td>
       <td class="r b">${r.amount.toLocaleString()}</td>
       <td>${E(r.detail || '—')}</td>
@@ -473,7 +514,7 @@ function downloadDriverRecord() {
 <table class="info">
   <tr>${infoCell('Name', d.name)}${infoCell('Phone', d.phone)}</tr>
   <tr>${infoCell('CNIC', d.cnic)}${infoCell('License', d.license)}</tr>
-  <tr>${infoCell('Joined', d.createdAt)}${infoCell('Assigned Vehicle', vehicle ? vehicle.plate : '—')}</tr>
+  <tr>${infoCell('Joined', FleetDB.fmtDate(d.createdAt))}${infoCell('Assigned Vehicle', vehicle ? vehicle.plate : '—')}</tr>
   <tr>${infoCell('Monthly Salary', d.salary ? 'PKR ' + d.salary.toLocaleString() : '—')}${infoCell('Status', d.status)}</tr>
   ${d.notes ? `<tr><td colspan="2" style="border:none;padding:2px 0;"><span style="color:#666;">Notes:</span> <strong>${E(d.notes)}</strong></td></tr>` : ''}
   <tr><td colspan="2" style="border:none;padding:2px 0;"><span style="color:#666;">Record generated:</span> <strong>${E(FleetDB.nowPKT())}</strong></td></tr>

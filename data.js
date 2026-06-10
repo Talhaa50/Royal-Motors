@@ -38,6 +38,22 @@ const FleetDB = (() => {
   const today = () => new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Karachi', year: 'numeric', month: '2-digit', day: '2-digit'
   }).format(new Date());                               // -> 'YYYY-MM-DD' in PKT
+  // Display a stored date (YYYY-MM-DD or ISO) as DD/MM/YYYY. Leaves other text as-is.
+  const fmtDate = d => {
+    if (d == null || d === '') return '—';
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d));
+    return m ? (m[3] + '/' + m[2] + '/' + m[1]) : String(d);
+  };
+  // Display a 24h "HH:MM" time as 12-hour "h:MM AM/PM".
+  const fmtTime = t => {
+    if (!t) return '—';
+    const p = String(t).split(':');
+    const h = parseInt(p[0], 10);
+    if (isNaN(h)) return String(t);
+    const ap = h >= 12 ? 'PM' : 'AM';
+    const h12 = ((h + 11) % 12) + 1;
+    return h12 + ':' + String(p[1] || '00').padStart(2, '0') + ' ' + ap;
+  };
   // Live PKT date+time string for display, e.g. "Mon, 8 Jun 2026 · 2:56 PM PKT"
   const nowPKT = () => {
     const d = new Intl.DateTimeFormat('en-GB', {
@@ -265,7 +281,12 @@ const FleetDB = (() => {
   /* ── Add Trip ────────────────────────────── */
   function addTrip(tripData) {
     const trips = getTrips();
-    const id = 'TRP-' + uid();
+    // Sequential, human-friendly IDs: TRIP-1, TRIP-2, …
+    const maxN = trips.reduce((m, t) => {
+      const mm = /^TRIP-(\d+)$/.exec(t.id || '');
+      return mm ? Math.max(m, parseInt(mm[1], 10)) : m;
+    }, 0);
+    const id = 'TRIP-' + (maxN + 1);
     const gross      = parseFloat(tripData.gross)      || 0;
     const commission = parseFloat(tripData.commission) || 0;
     const expenses   = parseFloat(tripData.expenses)   || 0;
@@ -283,6 +304,7 @@ const FleetDB = (() => {
       status:     tripData.status || 'completed',
       notes:      tripData.notes  || '',
       createdAt:  today(),
+      createdTs:  Date.now(),
     };
     trips.unshift(trip);
     save(KEYS.trips, trips);
@@ -320,6 +342,7 @@ const FleetDB = (() => {
       date:     data.date    || today(),
       notes:    data.notes   || '',
       ref:      data.ref     || id,
+      createdTs: Date.now(),
     };
     payouts.unshift(payout);
     save(KEYS.payouts, payouts);
@@ -343,7 +366,7 @@ const FleetDB = (() => {
   function addVendor(data) {
     const vendors = getVendors();
     const id = 'v' + uid();
-    const vendor = { id, name:data.name||'', contact:data.contact||'', phone:data.phone||'', commRate:parseFloat(data.commRate)||15, status:'active', color:data.color||'#2A9D8F' };
+    const vendor = { id, name:data.name||'', contact:data.contact||'', phone:data.phone||'', cnic:data.cnic||'', notes:data.notes||'', photo:data.photo||null, commRate:parseFloat(data.commRate)||15, status:'active', color:data.color||'#2A9D8F', createdAt:today(), createdTs:Date.now() };
     vendors.push(vendor);
     save(KEYS.vendors, vendors);
     return vendor;
@@ -379,7 +402,7 @@ const FleetDB = (() => {
   function addDriver(data) {
     const drivers = getDrivers();
     const id = 'd' + uid();
-    const d = { id, name:data.name||'', phone:data.phone||'', cnic:data.cnic||'', salary:parseFloat(data.salary)||0, license:data.license||'', notes:data.notes||'', photo:data.photo||null, vehicleId:data.vehicleId||'', status:'active', createdAt: today() };
+    const d = { id, name:data.name||'', phone:data.phone||'', cnic:data.cnic||'', salary:parseFloat(data.salary)||0, license:data.license||'', notes:data.notes||'', photo:data.photo||null, vehicleId:data.vehicleId||'', status:'active', createdAt: today(), createdTs: Date.now() };
     drivers.push(d);
     save(KEYS.drivers, drivers);
     return d;
@@ -440,6 +463,7 @@ const FleetDB = (() => {
       notes:     data.notes   || '',
       status:    data.status  || 'active',
       createdAt: today(),
+      createdTs: Date.now(),
     };
     customers.unshift(c);
     save(KEYS.customers, customers);
@@ -463,14 +487,18 @@ const FleetDB = (() => {
   };
 
   /* ── Booking CRUD ────────────────────────── */
-  const getBookings     = ()  => load(KEYS.bookings);
+  // getBookings() excludes soft-deleted bookings, so every consumer (cashbook,
+  // invoices, customer history, vendor analytics, sales) auto-ignores them.
+  // getAllBookings() includes them — used only by the Bookings tab to show them in red.
+  const getBookings     = ()  => load(KEYS.bookings).filter(b => !b._deleted);
+  const getAllBookings  = ()  => load(KEYS.bookings);
   const getBooking      = id  => load(KEYS.bookings).find(b => b.id === id);
-  const getHoldBookings = ()  => load(KEYS.bookings).filter(b => b.status === 'hold');
+  const getHoldBookings = ()  => load(KEYS.bookings).filter(b => b.status === 'hold' && !b._deleted);
 
   const getCustomerBookingHistory = customerId =>
     load(KEYS.bookings)
-      .filter(b => b.customerId === customerId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .filter(b => b.customerId === customerId && !b._deleted)
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 
   function addBooking(data) {
     const all = load(KEYS.bookings);
@@ -486,13 +514,19 @@ const FleetDB = (() => {
       tourFromDate:  data.tourFromDate  || '',
       tourToDate:    data.tourToDate    || '',
       requestedDate: data.requestedDate || today(),
+      timeFrom:      data.timeFrom || '07:00',
+      timeTo:        data.timeTo   || '18:00',
       vehicleIds:    Array.isArray(data.vehicleIds) ? data.vehicleIds : [],
       driverIds:     Array.isArray(data.driverIds)  ? data.driverIds  : [],
       gross:         data.gross      ? parseFloat(data.gross)      : null,
       commission:    data.commission ? parseFloat(data.commission) : null,
       status:        data.status     || 'confirmed',
       notes:         data.notes      || '',
+      guard:         !!data.guard,
+      guardCost:     parseFloat(data.guardCost) || 0,
+      advancePaid:   parseFloat(data.advancePaid) || 0,
       createdAt:     today(),
+      createdTs:     Date.now(),
     };
     all.unshift(b);
     save(KEYS.bookings, all);
@@ -508,7 +542,22 @@ const FleetDB = (() => {
     return all[idx];
   }
 
-  const deleteBooking = id => save(KEYS.bookings, load(KEYS.bookings).filter(b => b.id !== id));
+  // Soft delete — keep the record but flag it (stays visible, in red, on the Bookings tab)
+  function deleteBooking(id) {
+    const all = load(KEYS.bookings);
+    const idx = all.findIndex(b => b.id === id);
+    if (idx === -1) return;
+    all[idx] = { ...all[idx], _deleted: true, deletedAt: today() };
+    save(KEYS.bookings, all);
+  }
+  function restoreBooking(id) {
+    const all = load(KEYS.bookings);
+    const idx = all.findIndex(b => b.id === id);
+    if (idx === -1) return;
+    const b = { ...all[idx] }; delete b._deleted; delete b.deletedAt;
+    all[idx] = b;
+    save(KEYS.bookings, all);
+  }
 
   /* ── Expenses (variable) ────────────────── */
   const EXP_CATS = {
@@ -535,6 +584,7 @@ const FleetDB = (() => {
       amount:      parseFloat(data.amount) || 0,
       notes:       data.notes       || '',
       createdAt:   today(),
+      createdTs:   Date.now(),
     };
     all.unshift(e);
     save(KEYS.expenses, all);
@@ -598,6 +648,7 @@ const FleetDB = (() => {
       reason:    data.reason || '',
       status:    'pending',
       createdAt: today(),
+      createdTs: Date.now(),
     };
     advances.unshift(a);
     save(KEYS.advances, advances);
@@ -629,20 +680,18 @@ const FleetDB = (() => {
     const bk = t.bookingId ? load(KEYS.bookings).find(x => x.id === t.bookingId) : null;
     const s  = loadO(KEYS.settings);
 
-    const dateFormatted = t.date
-      ? new Date(t.date + 'T00:00:00').toLocaleDateString('en-US', { day:'numeric', month:'long', year:'numeric' })
-      : '—';
+    const dateFormatted = fmtDate(t.date);
     const statusColor = t.status === 'completed' ? '#059669' : t.status === 'pending' ? '#d4a017' : '#e76f51';
     const commPct     = t.commPct ? ' (' + t.commPct + '%)' : '';
     const generatedAt = new Date().toLocaleString('en-US', { dateStyle:'medium', timeStyle:'short' });
 
     // Route from linked booking or notes fallback
     let routeSection = '';
-    if (bk && bk.serviceType === 'pick_drop' && (bk.fromLocation || bk.toLocation)) {
+    if (bk && (bk.fromLocation || bk.toLocation)) {
       routeSection = '<div class="section">'
         + '<div class="section-label">Route</div>'
         + '<div style="display:flex;align-items:center;gap:12px;">'
-        + '<span style="font-size:22px;flex-shrink:0;">🚗</span>'
+        + '<span style="font-size:22px;flex-shrink:0;">' + (bk.serviceType === 'pick_drop' ? '🛞' : '🌍') + '</span>'
         + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
         + '<span style="font-size:14px;font-weight:700;color:#111;">' + escapeHtml(bk.fromLocation || '?') + '</span>'
         + '<span style="font-size:16px;color:#2A9D8F;font-weight:700;">→</span>'
@@ -654,9 +703,9 @@ const FleetDB = (() => {
         + '<div style="display:flex;align-items:center;gap:12px;">'
         + '<span style="font-size:22px;flex-shrink:0;">🗺</span>'
         + '<div style="display:flex;align-items:center;gap:8px;">'
-        + '<span style="font-size:14px;font-weight:700;color:#111;">' + escapeHtml(bk.tourFromDate || '?') + '</span>'
+        + '<span style="font-size:14px;font-weight:700;color:#111;">' + escapeHtml(fmtDate(bk.tourFromDate)) + '</span>'
         + '<span style="font-size:16px;color:#2A9D8F;font-weight:700;">→</span>'
-        + '<span style="font-size:14px;font-weight:700;color:#111;">' + escapeHtml(bk.tourToDate || '?') + '</span>'
+        + '<span style="font-size:14px;font-weight:700;color:#111;">' + escapeHtml(fmtDate(bk.tourToDate)) + '</span>'
         + '</div></div></div>';
     } else if (t.notes) {
       routeSection = '<div class="section">'
@@ -668,7 +717,6 @@ const FleetDB = (() => {
     // Vehicle display — combine make/model/year if available
     const vehMakeModel = vh ? ([vh.make, vh.model].filter(Boolean).join(' ') || vh.plate) : '—';
     const vehYear      = vh && vh.year ? String(vh.year) : '';
-    const vehComm      = vh && vh.commPct ? vh.commPct + '% commission' : '';
 
     const row = (label, value, color, borderBottom) =>
       '<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 20px;'
@@ -724,18 +772,16 @@ const FleetDB = (() => {
       + '<div class="vehicle-row"><div class="vehicle-icon">&#x1F697;</div><div style="flex:1;">'
       + '<div class="plate">' + escapeHtml(vh ? vh.plate : '—') + '</div>'
       + '<div class="model">' + escapeHtml(vehMakeModel) + (vehYear ? ' · ' + vehYear : '') + '</div>'
-      + (vehComm ? '<div style="font-size:10px;color:#999;margin-top:2px;">' + escapeHtml(vehComm) + '</div>' : '')
       + '</div></div></div>'
       + '<div class="section"><div class="section-label">Duty Details</div>'
       + '<div class="info-grid">'
       + '<div class="info-box"><div class="info-box-label">Driver</div><div class="info-box-value">' + escapeHtml(dr ? dr.name : '—') + '</div></div>'
       + '<div class="info-box"><div class="info-box-label">Vendor</div><div class="info-box-value">' + escapeHtml(vn ? vn.name : '—') + '</div></div>'
-      + '<div class="info-box"><div class="info-box-label">Duty Date</div><div class="info-box-value" style="font-size:12px;">' + (t.date || '—') + '</div></div>'
+      + '<div class="info-box"><div class="info-box-label">Duty Date</div><div class="info-box-value" style="font-size:12px;">' + fmtDate(t.date) + '</div></div>'
       + '<div class="info-box"><div class="info-box-label">Status</div><div class="info-box-value" style="color:' + statusColor + ';">' + escapeHtml((t.status||'').toUpperCase()) + '</div></div>'
       + '</div></div>'
       + '<div class="breakdown">'
       + row('Gross Revenue', 'PKR ' + (t.gross||0).toLocaleString(), '#111', true)
-      + row('Commission' + commPct, '− PKR ' + (t.commission||0).toLocaleString(), '#e76f51', true)
       + (t.expenses > 0 ? row('Expenses', '− PKR ' + t.expenses.toLocaleString(), '#e76f51', true) : '')
       + '</div>'
       + '<div class="net-row"><span class="net-label">Vendor Net</span><span class="net-value">PKR ' + (t.net||0).toLocaleString() + '</span></div>'
@@ -754,7 +800,9 @@ const FleetDB = (() => {
     const allTrips   = load(KEYS.trips).filter(t => t.vendorId === vendorId && t.status !== 'cancelled' && filterFn(t)).sort((a, b) => b.date.localeCompare(a.date));
     const allPayouts = load(KEYS.payouts).filter(p => p.vendorId === vendorId && filterFn(p)).sort((a, b) => b.date.localeCompare(a.date));
     const vehicles   = load(KEYS.vehicles).filter(vh => vh.vendorId === vendorId && !vh._deleted);
-    const printDate  = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+    const bkById     = {}; load(KEYS.bookings).forEach(b => { bkById[b.id] = b; });
+    const routeOf    = t => { const b = t.bookingId ? bkById[t.bookingId] : null; if (!b || (!b.fromLocation && !b.toLocation)) return '—'; return (b.fromLocation || '—') + ' → ' + (b.toLocation || '—'); };
+    const printDate  = fmtDate(today());
 
     const totalRev  = allTrips.reduce((s, t) => s + (t.gross || 0), 0);
     const totalComm = allTrips.reduce((s, t) => s + (t.commission || 0), 0);
@@ -764,26 +812,25 @@ const FleetDB = (() => {
     const balance   = totalNet - totalPaid;
     const balColor  = balance > 0 ? '#c00' : '#059669';
 
-    const tripsRows = allTrips.slice(0, 200).map(t => {
+    const tripsRows = allTrips.slice(0, 200).map((t, i) => {
       const vh = load(KEYS.vehicles).find(x => x.id === t.vehicleId);
-      return '<tr><td>' + escapeHtml(t.id) + '</td><td>' + escapeHtml(t.date) + '</td><td>' + escapeHtml(vh ? vh.plate : '—') + '</td>'
+      return '<tr><td style="text-align:center;">' + (i + 1) + '</td><td>' + escapeHtml(fmtDate(t.date)) + '</td><td>' + escapeHtml(vh ? vh.plate : '—') + '</td>'
+        + '<td>' + escapeHtml(routeOf(t)) + '</td>'
         + '<td style="text-align:right;">PKR ' + (t.gross||0).toLocaleString() + '</td>'
-        + '<td style="text-align:right;">PKR ' + (t.commission||0).toLocaleString() + '</td>'
         + '<td style="text-align:right;">' + (t.expenses ? 'PKR '+t.expenses.toLocaleString() : '—') + '</td>'
         + '<td style="text-align:right;font-weight:600;">PKR ' + (t.net||0).toLocaleString() + '</td></tr>';
     }).join('');
 
     const payoutRows = allPayouts.map(p =>
-      '<tr><td>' + escapeHtml(p.date) + '</td><td>' + escapeHtml(p.method) + '</td>'
+      '<tr><td>' + escapeHtml(fmtDate(p.date)) + '</td><td>' + escapeHtml(p.method) + '</td>'
       + '<td style="text-align:right;font-weight:600;">PKR ' + (p.amount||0).toLocaleString() + '</td>'
       + '<td>' + escapeHtml(p.notes || '—') + '</td></tr>'
     ).join('');
 
     const footerRow = allTrips.length
       ? '<tfoot><tr style="font-weight:700;background:#f8f8f8;border-top:1px solid #ccc;">'
-        + '<td colspan="3">Total (' + allTrips.length + ' trips)</td>'
+        + '<td colspan="4">Total (' + allTrips.length + ' trips)</td>'
         + '<td style="text-align:right;">PKR ' + totalRev.toLocaleString() + '</td>'
-        + '<td style="text-align:right;">PKR ' + totalComm.toLocaleString() + '</td>'
         + '<td style="text-align:right;">PKR ' + totalExp.toLocaleString() + '</td>'
         + '<td style="text-align:right;">PKR ' + totalNet.toLocaleString() + '</td>'
         + '</tr></tfoot>'
@@ -816,7 +863,7 @@ const FleetDB = (() => {
       + '</head><body>'
       + '<div class="hdr"><div>'
       + '<h1>' + escapeHtml(v.name||'') + '</h1>'
-      + '<div class="sub">Contact: ' + escapeHtml(v.contact||'—') + ' &nbsp;·&nbsp; ' + escapeHtml(v.phone||'—') + ' &nbsp;·&nbsp; Commission: ' + v.commRate + '%</div>'
+      + '<div class="sub">Contact: ' + escapeHtml(v.contact||'—') + ' &nbsp;·&nbsp; ' + escapeHtml(v.phone||'—') + '</div>'
       + '<div class="sub">Vehicles: ' + escapeHtml(vehicles.map(vh => vh.plate).join(', ') || 'None') + '</div>'
       + '<div class="pbadge">' + periodLabel + '</div>'
       + '</div><div style="text-align:right;">'
@@ -831,8 +878,8 @@ const FleetDB = (() => {
       + '<div class="mb"><div class="ml">Paid Out</div><div class="mv" style="color:#059669;">PKR ' + totalPaid.toLocaleString() + '</div></div>'
       + '</div>'
       + '<h2>Trip Records' + (allTrips.length > 200 ? ' (first 200)' : '') + '</h2>'
-      + '<table><thead><tr><th>Trip ID</th><th>Date</th><th>Vehicle</th>'
-      + '<th style="text-align:right;">Revenue</th><th style="text-align:right;">Commission</th>'
+      + '<table><thead><tr><th style="width:30px;text-align:center;">#</th><th>Date</th><th>Vehicle</th><th>Route</th>'
+      + '<th style="text-align:right;">Revenue</th>'
       + '<th style="text-align:right;">Expenses</th><th style="text-align:right;">Vendor Net</th></tr></thead>'
       + '<tbody>' + (tripsRows || '<tr><td colspan="7" style="text-align:center;padding:12px;color:#888;">No trips in this period</td></tr>') + '</tbody>'
       + footerRow + '</table>'
@@ -851,7 +898,7 @@ const FleetDB = (() => {
     if (!p) return '';
     const v  = load(KEYS.vendors).find(x => x.id === p.vendorId);
     const s  = loadO(KEYS.settings);
-    const dateFormatted = p.date ? new Date(p.date + 'T00:00:00').toLocaleDateString('en-US', { day:'numeric', month:'long', year:'numeric' }) : '—';
+    const dateFormatted = fmtDate(p.date);
     const generatedAt = new Date().toLocaleString('en-US', { dateStyle:'medium', timeStyle:'short' });
     const coName = s.companyName || s.bizName || 'Royal Motors';
     const vendorLetter = v ? v.name[0].toUpperCase() : '?';
@@ -962,6 +1009,7 @@ const FleetDB = (() => {
       method:    data.method    || 'Cash',
       notes:     data.notes     || '',
       createdAt: today(),
+      createdTs: Date.now(),
     };
     payments.unshift(payment);
     save(KEYS.salaryPayments, payments);
@@ -1021,6 +1069,7 @@ const FleetDB = (() => {
       date:   data.date || today(),
       note:   data.note || '',
       createdAt: today(),
+      createdTs: Date.now(),
     };
     list.unshift(entry);
     save(KEYS.cashEntries, list);
@@ -1113,16 +1162,19 @@ const FleetDB = (() => {
     // Sidebar
     const sidebar = document.getElementById('sidebar');
     if (sidebar) {
+      const isOwner = getRole() === 'owner';
       const nav = (href, icon, label) => {
         const active = activePage === href ? 'active' : '';
         return `<a class="nav-item ${active}" href="${href}"><span class="nav-icon">${icon}</span><span>${label}</span></a>`;
       };
+      // Owner-only items render nothing for employees
+      const oNav = (...a) => isOwner ? nav(...a) : '';
       sidebar.innerHTML = `
         <div class="sidebar-nav">
-          <div class="sidebar-section">
+          ${isOwner ? `<div class="sidebar-section">
             <div class="sidebar-label">Main</div>
             ${nav('index.html','⬡','Dashboard')}
-          </div>
+          </div>` : ''}
           <div class="sidebar-section">
             <div class="sidebar-label">Operations</div>
             ${nav('dispatch.html','⊕','Booking')}
@@ -1131,11 +1183,12 @@ const FleetDB = (() => {
             ${nav('drivers.html','◈','Drivers')}
             ${nav('customers.html','👤','Customers')}
           </div>
-          <div class="sidebar-section">
+          ${isOwner ? `<div class="sidebar-section">
             <div class="sidebar-label">Finance</div>
             ${nav('vendors.html','◆','Vendors')}
             ${nav('ledger.html','≡','Vendor Ledger')}
             ${nav('payouts.html','⇄','Payouts')}
+            ${nav('receivables.html','⏳','Receivables')}
             ${nav('salary.html','₨','Driver Salary')}
             ${nav('expenses.html','⊟','Expenses')}
             ${nav('reports.html','◑','Reports')}
@@ -1143,7 +1196,7 @@ const FleetDB = (() => {
           <div class="sidebar-section">
             <div class="sidebar-label">Admin</div>
             ${nav('settings.html','⚙','Settings')}
-          </div>
+          </div>` : ''}
         </div>
         <div class="sidebar-bottom">
           <div class="sidebar-user">
@@ -1284,8 +1337,10 @@ const FleetDB = (() => {
 
   /* ── Auth ────────────────────────────────── */
   function isLoggedIn() { return sessionStorage.getItem('fo_auth') === '1'; }
+  function getRole()   { return sessionStorage.getItem('fo_role') || 'owner'; }
   function logout() {
     sessionStorage.removeItem('fo_auth');
+    sessionStorage.removeItem('fo_role');
     if (window.fbAuth) window.fbAuth.signOut().catch(() => {});
     location.href = 'login.html';
   }
@@ -1293,18 +1348,37 @@ const FleetDB = (() => {
   /* ── Init ────────────────────────────────── */
   function init(activePage) {
     if (!isLoggedIn()) { location.href = 'login.html'; return; }
+    // Role gating — employees can only reach operational pages
+    const role = getRole();
+    const EMP_OK = ['dispatch.html', 'trips.html', 'vehicles.html', 'drivers.html', 'customers.html'];
+    if (role === 'employee' && !EMP_OK.includes(activePage)) { location.href = 'dispatch.html'; return; }
+    document.body.dataset.role = role;
     seed();
     renderShell(activePage);
     // Close modal on overlay click
     document.querySelectorAll('.modal-overlay').forEach(m => {
       m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
     });
+    // Block future dates on all native date pickers (payouts, expenses, salary,
+    // bill completion, cash entries, etc.). The booking page uses flatpickr text
+    // inputs, so it is unaffected and can still book future dates.
+    const _todayStr = today();
+    document.querySelectorAll('input[type="date"]').forEach(el => { if (!el.max) el.max = _todayStr; });
     // Accessibility: label all ✕ close buttons
     document.querySelectorAll('.icon-btn').forEach(btn => {
       if (btn.textContent.trim() === '✕' && !btn.getAttribute('aria-label')) {
         btn.setAttribute('aria-label', 'Close');
       }
     });
+    // Employees don't sign into Firebase themselves — show a neutral "Employee"
+    // identity instead of leaking the owner's persisted account email.
+    if (role === 'employee') {
+      const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+      set('topbarAvatar', 'E'); set('sidebarAvatar', 'E');
+      set('sidebarUserName', 'Employee'); set('sidebarUserEmail', 'Staff access');
+      const te = document.getElementById('topbarUserEmail'); if (te) te.style.display = 'none';
+      return;
+    }
     // Show Firebase Auth user email in topbar + sidebar when auth resolves
     if (window.fbAuth) {
       window.fbAuth.onAuthStateChanged(user => {
@@ -1358,17 +1432,17 @@ const FleetDB = (() => {
     getDeletedCustomers, getCustomerBookings, getCustomerByPhone,
     getExpenses, getExpense, addExpense, updateExpense, deleteExpense, EXP_CATS,
     getFixedCosts, getFixedCost, addFixedCost, updateFixedCost, deleteFixedCost,
-    getBookings, getBooking, getHoldBookings, addBooking, updateBooking, deleteBooking,
+    getBookings, getAllBookings, getBooking, getHoldBookings, addBooking, updateBooking, deleteBooking, restoreBooking,
     getCustomerBookingHistory,
     getAdvances, addAdvance, settleAdvance, deleteAdvance, getDriverAdvanceSummary,
     // Helpers
-    fmtMoney, fmtK, today, nowPKT, escapeHtml,
+    fmtMoney, fmtK, today, nowPKT, fmtDate, fmtTime, escapeHtml,
     // UI
     init, renderShell, showToast, openModal, closeModal, openPrintWindow, pagerHTML, debounce,
     showLoadingOverlay, hideLoadingOverlay,
     toggleTheme, getTheme, setTheme,
     toggleSidebar, closeSidebar,
-    isLoggedIn, logout,
+    isLoggedIn, getRole, logout,
     reset, cleanSlate,
   };
 })();

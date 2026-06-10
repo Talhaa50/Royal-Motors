@@ -343,7 +343,7 @@ function renderSalaryTable() {
       <td class="td-mono" style="font-size:12px;">${assignedVeh ? E(assignedVeh.plate) : '<span style="color:var(--text-muted);">None</span>'}</td>
       <td class="td-amount">${d.salary ? FleetDB.fmtMoney(d.salary) : '—'}</td>
       <td><span class="badge ${paid ? 'badge-green' : 'badge-red'}">${paid ? 'Paid' : 'Unpaid'}</span></td>
-      <td class="td-mono" style="font-size:12px;">${paidDate}</td>
+      <td class="td-mono" style="font-size:12px;">${FleetDB.fmtDate(paidDate)}</td>
       <td>${methodBadge}</td>
       <td>${paidAmt}</td>
       <td>${actions}</td>
@@ -368,7 +368,7 @@ function renderHistory() {
       <td style="font-size:13px;">${FleetDB.escapeHtml(driver ? driver.name : p.driverId)}</td>
       <td class="td-amount">${FleetDB.fmtMoney(p.amount)}</td>
       <td><span class="badge badge-muted" style="font-size:10px;">${FleetDB.escapeHtml(p.method)}</span></td>
-      <td class="td-mono" style="font-size:12px;">${FleetDB.escapeHtml(p.paidDate)}</td>
+      <td class="td-mono" style="font-size:12px;">${FleetDB.escapeHtml(FleetDB.fmtDate(p.paidDate))}</td>
       <td style="font-size:12px;color:var(--text-secondary);">${FleetDB.escapeHtml(p.notes || '—')}</td>
       <td><button class="btn btn-secondary btn-sm" style="color:var(--red);" onclick="deletePayment('${p.id}')">Delete</button></td>
     </tr>`;
@@ -409,7 +409,7 @@ function renderAdvances() {
       <td class="td-mono" style="font-size:11px;color:var(--text-muted);">${a.id}</td>
       <td style="font-weight:600;font-size:13px;">${FleetDB.escapeHtml(d ? d.name : a.driverId)}</td>
       <td class="td-amount" style="color:var(--amber);">PKR ${(a.amount||0).toLocaleString()}</td>
-      <td class="td-mono" style="font-size:12px;">${a.date}</td>
+      <td class="td-mono" style="font-size:12px;">${FleetDB.fmtDate(a.date)}</td>
       <td style="font-size:12px;color:var(--text-secondary);">${FleetDB.escapeHtml(a.reason || '—')}</td>
       <td><span class="badge ${isPending ? 'badge-amber' : 'badge-green'}">${isPending ? 'Pending' : 'Settled'}</span></td>
       <td>

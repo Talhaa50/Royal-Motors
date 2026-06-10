@@ -86,3 +86,52 @@ const FleetSync = (() => {
   return { pull, pushAll, pushKey, queuePush, get uid() { return currentUid; } };
 })();
 window.FleetSync = FleetSync;
+
+/* ============================================
+   ImageStore — compress images, then store in Firebase Storage (returns a URL).
+   Falls back to a compressed base64 data-URL when Storage/auth isn't available,
+   so uploads never overflow localStorage and nothing breaks offline.
+   ============================================ */
+window.ImageStore = (() => {
+  // Downscale + JPEG-compress a File to a small data-URL.
+  function compress(file, maxDim = 700, quality = 0.72) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+          let w = img.width, h = img.height;
+          if (w >= h && w > maxDim)      { h = Math.round(h * maxDim / w); w = maxDim; }
+          else if (h > w && h > maxDim)  { w = Math.round(w * maxDim / h); h = maxDim; }
+          else if (w > maxDim)           { h = Math.round(h * maxDim / w); w = maxDim; }
+          const c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          try { resolve(c.toDataURL('image/jpeg', quality)); }
+          catch (err) { reject(err); }
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Upload a data-URL to Firebase Storage and return the download URL.
+  // Returns the data-URL itself if Storage/auth isn't ready (safe fallback).
+  async function upload(dataUrl, folder) {
+    try {
+      const uid = window.FleetSync && window.FleetSync.uid;
+      if (window.fbStorage && uid) {
+        const id  = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        const ref = window.fbStorage.ref('users/' + uid + '/' + (folder || 'img') + '/' + id + '.jpg');
+        await ref.putString(dataUrl, 'data_url');
+        return await ref.getDownloadURL();
+      }
+    } catch (e) { console.warn('[ImageStore] upload failed — keeping inline image:', e); }
+    return dataUrl;
+  }
+
+  return { compress, upload };
+})();

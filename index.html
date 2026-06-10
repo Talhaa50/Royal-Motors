@@ -115,7 +115,7 @@ let revChart, liabChart;
 function loadDashboard() {
   const days = parseInt(document.getElementById('periodSel').value) || 30;
   document.getElementById('pageSubtitle').textContent =
-    'Overview · ' + new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+    'Overview · ' + FleetDB.fmtDate(FleetDB.today());
   document.getElementById('chartSubtitle').textContent = days === 1 ? 'Today' : 'Last ' + days + ' days';
 
   const stats = FleetDB.getDashboardStats(days);
@@ -273,7 +273,7 @@ function renderAlerts(stats) {
 /* ── Revenue Chart ── */
 function renderRevenueChart(days) {
   const byDay = FleetDB.getTripsByDay(days);
-  const labels = Object.keys(byDay).map(d => { const dt=new Date(d); return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'}); });
+  const labels = Object.keys(byDay).map(d => { const p = d.split('-'); return p[2] + '/' + p[1]; });
   const revData  = Object.values(byDay).map(d => d.rev);
   const commData = Object.values(byDay).map(d => d.comm);
 
@@ -398,7 +398,7 @@ function renderRecentTrips() {
       </div>
       <div class="leaderboard-info">
         <div class="leaderboard-name">${FleetDB.escapeHtml(v ? v.plate : t.vehicleId)}</div>
-        <div class="leaderboard-sub">${t.date} · Comm ${FleetDB.fmtMoney(t.commission)}</div>
+        <div class="leaderboard-sub">${FleetDB.fmtDate(t.date)} · Comm ${FleetDB.fmtMoney(t.commission)}</div>
       </div>
       <div class="leaderboard-value" style="color:var(--emerald);">${FleetDB.fmtMoney(t.gross)}</div>
     </div>`;

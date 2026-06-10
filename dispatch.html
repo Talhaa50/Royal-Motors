@@ -192,9 +192,19 @@
               </div>
             </div>
 
-            <!-- Duty dates -->
+            <!-- Duty dates + route -->
             <div id="tourFields" style="display:none;">
               <div class="form-row" style="margin-top:12px;">
+                <div class="form-group">
+                  <label class="form-label">From <span class="required">*</span></label>
+                  <input type="text" class="form-input" id="dutyFrom" placeholder="Start location"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">To <span class="required">*</span></label>
+                  <input type="text" class="form-input" id="dutyTo" placeholder="Destination"/>
+                </div>
+              </div>
+              <div class="form-row">
                 <div class="form-group">
                   <label class="form-label">Start Date <span class="required">*</span></label>
                   <input type="text" class="form-input" id="tourFrom" placeholder="Start date" readonly style="cursor:pointer;"/>
@@ -209,6 +219,18 @@
                 <select class="form-select" id="tourDriver">
                   <option value="">— No preference —</option>
                 </select>
+              </div>
+            </div>
+
+            <!-- Appointment time (shared: Duty + Pick & Drop) -->
+            <div class="form-row" style="margin-top:12px;">
+              <div class="form-group">
+                <label class="form-label">Time From <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                <input type="time" class="form-input" id="bkTimeFrom" value="07:00"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Time To <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                <input type="time" class="form-input" id="bkTimeTo" value="18:00"/>
               </div>
             </div>
 
@@ -227,6 +249,15 @@
                 <div class="purpose-card" data-val="north_tour"   onclick="setPurpose('north_tour')">   <span class="pc-icon">🏔️</span><span class="pc-lbl">NORTH TOUR</span></div>
                 <div class="purpose-card" data-val="other"        onclick="setPurpose('other')">        <span class="pc-icon">📝</span><span class="pc-lbl">OTHER</span></div>
               </div>
+            </div>
+
+            <!-- Private security guard (shared: Duty + Pick & Drop) -->
+            <div style="margin-top:16px;">
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg-elevated);max-width:420px;">
+                <input type="checkbox" id="bkGuard" onchange="toggleGuard()" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;"/>
+                <span style="font-size:14px;">🛡️ <strong>Private Security Guard</strong>
+                  <span style="color:var(--text-muted);font-size:12px;">— guard rides along (extra charge)</span></span>
+              </label>
             </div>
 
           </div>
@@ -354,6 +385,19 @@
                     <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">▲▼ ±1,000</div>
                   </div>
                 </div>
+                <!-- Guard charges (enabled when guard checkbox is on) -->
+                <div class="form-group" id="guardChargeWrap" style="margin:12px 0 0;display:none;max-width:240px;">
+                  <label class="form-label">🛡️ Guard Charges</label>
+                  <div class="input-group"><span class="input-prefix">₨</span>
+                    <input type="number" class="form-input" id="bkGuardCost" placeholder="0" min="0"/></div>
+                </div>
+                <!-- Customer advance paid (before completing the duty) -->
+                <div class="form-group" style="margin:12px 0 0;max-width:240px;">
+                  <label class="form-label">💵 Advance Paid <span style="font-size:10px;color:var(--text-muted);font-weight:400;">(opt.)</span></label>
+                  <div class="input-group"><span class="input-prefix">₨</span>
+                    <input type="number" class="form-input" id="bkAdvance" placeholder="0" min="0"/></div>
+                  <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">What the customer paid upfront. Remaining = Gross − Advance.</div>
+                </div>
               </div>
             </div>
 
@@ -419,6 +463,19 @@ populateTourDrivers();
 renderVehicles();
 renderHoldQueue();
 setSvc('tour');
+
+/* Auto-capitalise the first letter of name / location / notes fields as you type */
+['custName','fromLoc','toLoc','dutyFrom','dutyTo','bkNotes'].forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', () => {
+    if (el.value && el.value[0] !== el.value[0].toUpperCase()) {
+      const pos = el.selectionStart;
+      el.value = el.value[0].toUpperCase() + el.value.slice(1);
+      try { el.setSelectionRange(pos, pos); } catch (e) {}
+    }
+  });
+});
 
 /* ═══════════════════════ SERVICE TYPE ════════════════ */
 function setSvc(t) {
@@ -687,7 +744,7 @@ function renderCustInfo() {
       <span style="font-size:14px;flex-shrink:0;">${SVC[b.serviceType] || '📋'}</span>
       <div style="flex:1;min-width:0;">
         <div style="font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${detail}</div>
-        <div style="font-size:10px;color:var(--text-muted);">${b.requestedDate}</div>
+        <div style="font-size:10px;color:var(--text-muted);">${FleetDB.fmtDate(b.requestedDate)}</div>
       </div>
       <span style="font-size:9px;font-weight:700;flex-shrink:0;color:${STC[b.status] || 'var(--text-muted)'};">${b.status.toUpperCase()}</span>
     </div>`;
@@ -745,7 +802,7 @@ function renderHoldQueue() {
               <span style="font-size:13px;font-weight:600;">${FleetDB.escapeHtml(b.customerName || '?')}</span>
               <span style="font-size:11px;color:var(--text-muted);margin-left:8px;">${FleetDB.escapeHtml(b.customerPhone || '')}</span>
               <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">
-                · ${b.serviceType === 'pick_drop' ? '🚗 Pick&Drop' : '🌍 Duty'} · ${b.requestedDate}
+                · ${b.serviceType === 'pick_drop' ? '🛞 Pick&Drop' : '🌍 Duty'} · ${FleetDB.fmtDate(b.requestedDate)}
               </span>
             </div>
             <button class="btn btn-secondary btn-sm" onclick="resumeHold('${b.id}')"
@@ -766,10 +823,14 @@ function resumeHold(id) {
   setSvc(b.serviceType);
   document.getElementById('fromLoc').value  = b.fromLocation || '';
   document.getElementById('toLoc').value    = b.toLocation   || '';
+  document.getElementById('dutyFrom').value = b.fromLocation || '';
+  document.getElementById('dutyTo').value   = b.toLocation   || '';
   pdPicker.setDate(b.requestedDate || FleetDB.today());
   if (b.tourFromDate) tourFromPicker.setDate(b.tourFromDate);
   if (b.tourToDate)   tourToPicker.setDate(b.tourToDate);
   setPurpose(b.purpose || '');
+  document.getElementById('bkTimeFrom').value = b.timeFrom || '07:00';
+  document.getElementById('bkTimeTo').value   = b.timeTo   || '18:00';
   const _drv = (b.driverIds && b.driverIds[0]) ? b.driverIds[0] : '';
   document.getElementById('tourDriver').value = _drv;
   document.getElementById('pdDriver').value   = _drv;
@@ -787,6 +848,10 @@ function resumeHold(id) {
     document.getElementById('finIcon').textContent = '▾';
   }
   if (b.commission) document.getElementById('bkComm').value = b.commission;
+  document.getElementById('bkGuard').checked = !!b.guard;
+  document.getElementById('bkGuardCost').value = b.guardCost || '';
+  document.getElementById('bkAdvance').value = b.advancePaid || '';
+  toggleGuard();
 
   document.getElementById('editBkId').value = id;
   document.getElementById('editBadge').style.display = '';
@@ -811,6 +876,18 @@ function toggleFin() {
   const show = document.getElementById('finFields').style.display === 'none';
   document.getElementById('finFields').style.display = show ? '' : 'none';
   document.getElementById('finIcon').textContent     = show ? '▾' : '▸';
+}
+
+function toggleGuard() {
+  const on = document.getElementById('bkGuard').checked;
+  document.getElementById('guardChargeWrap').style.display = on ? '' : 'none';
+  if (on) {
+    // reveal the Financial section so the guard charge is visible
+    document.getElementById('finFields').style.display = '';
+    document.getElementById('finIcon').textContent     = '▾';
+  } else {
+    document.getElementById('bkGuardCost').value = '';
+  }
 }
 
 /* ═══════════════════════ SAVE BOOKING ══════════════ */
@@ -849,10 +926,12 @@ function saveBk(forceStatus) {
     reqDate = document.getElementById('pdDate').value;
     if (!reqDate) { FleetDB.showToast('Select a date', 'error'); return; }
   } else {
+    if (!document.getElementById('dutyFrom').value.trim()) { FleetDB.showToast('Enter start location',  'error'); return; }
+    if (!document.getElementById('dutyTo').value.trim())   { FleetDB.showToast('Enter destination',     'error'); return; }
     const fd = document.getElementById('tourFrom').value;
     const td = document.getElementById('tourTo').value;
-    if (!fd) { FleetDB.showToast('Enter tour start date', 'error'); return; }
-    if (!td) { FleetDB.showToast('Enter tour end date',   'error'); return; }
+    if (!fd) { FleetDB.showToast('Enter start date', 'error'); return; }
+    if (!td) { FleetDB.showToast('Enter end date',   'error'); return; }
     if (td < fd) { FleetDB.showToast('End date must be after start date', 'error'); return; }
     reqDate = fd;
   }
@@ -861,17 +940,22 @@ function saveBk(forceStatus) {
   const driverId = svcType === 'pick_drop'
     ? document.getElementById('pdDriver').value
     : document.getElementById('tourDriver').value;
+  // Route (From/To) — Pick & Drop uses fromLoc/toLoc, Duty uses dutyFrom/dutyTo
+  const fromLoc = (svcType === 'pick_drop' ? document.getElementById('fromLoc').value : document.getElementById('dutyFrom').value).trim();
+  const toLoc   = (svcType === 'pick_drop' ? document.getElementById('toLoc').value   : document.getElementById('dutyTo').value).trim();
 
   const payload = {
     customerId:    curCust.id,
     customerName:  curCust.name,
     customerPhone: curCust.phone,
     serviceType:   svcType,
-    fromLocation:  document.getElementById('fromLoc').value.trim(),
-    toLocation:    document.getElementById('toLoc').value.trim(),
+    fromLocation:  fromLoc,
+    toLocation:    toLoc,
     tourFromDate:  document.getElementById('tourFrom').value,
     tourToDate:    document.getElementById('tourTo').value,
     requestedDate: reqDate,
+    timeFrom:      document.getElementById('bkTimeFrom').value || '07:00',
+    timeTo:        document.getElementById('bkTimeTo').value   || '18:00',
     vehicleIds:    Object.entries(selVehs).flatMap(([id, qty]) => Array(qty).fill(id)),
     driverIds:     driverId ? [driverId] : [],
     gross:         document.getElementById('bkGross').value || null,
@@ -879,6 +963,9 @@ function saveBk(forceStatus) {
     status,
     notes:         document.getElementById('bkNotes').value.trim(),
     purpose:       selPurpose,
+    guard:         document.getElementById('bkGuard').checked,
+    guardCost:     parseFloat(document.getElementById('bkGuardCost').value) || 0,
+    advancePaid:   parseFloat(document.getElementById('bkAdvance').value) || 0,
   };
 
   const editId = document.getElementById('editBkId').value;
@@ -904,7 +991,7 @@ function saveBk(forceStatus) {
 /* ═══════════════════════ CLEAR BOOKING FORM ════════ */
 function clearBkForm() {
   setSvc('tour');
-  ['fromLoc','toLoc','tourFrom','tourTo','bkNotes','bkGross','bkComm'].forEach(id => {
+  ['fromLoc','toLoc','dutyFrom','dutyTo','tourFrom','tourTo','bkNotes','bkGross','bkComm','bkGuardCost','bkAdvance'].forEach(id => {
     document.getElementById(id).value = '';
   });
   pdPicker.setDate(FleetDB.today());
@@ -913,7 +1000,11 @@ function clearBkForm() {
   setPurpose('');
   document.getElementById('tourDriver').value = '';
   document.getElementById('pdDriver').value    = '';
+  document.getElementById('bkTimeFrom').value = '07:00';
+  document.getElementById('bkTimeTo').value   = '18:00';
   document.getElementById('bkStatus').value   = 'confirmed';
+  document.getElementById('bkGuard').checked = false;
+  document.getElementById('guardChargeWrap').style.display = 'none';
   document.getElementById('finFields').style.display = 'none';
   document.getElementById('finIcon').textContent     = '▸';
   document.getElementById('editBkId').value          = '';

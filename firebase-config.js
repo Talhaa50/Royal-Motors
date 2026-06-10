@@ -16,6 +16,8 @@ if (typeof firebase !== 'undefined') {
   if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
   window.fbAuth = firebase.auth();
   window.fbDB   = firebase.firestore();
+  // Storage is optional — only available on pages that load the storage SDK.
+  if (firebase.storage) { try { window.fbStorage = firebase.storage(); } catch (e) {} }
 } else {
   console.error('[Firebase] SDK not loaded — check that the firebasejs <script> tags come before firebase-config.js');
 }

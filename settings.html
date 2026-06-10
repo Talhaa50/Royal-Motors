@@ -86,6 +86,18 @@
         </div>
       </div>
 
+      <!-- Staff Access (Employee role) -->
+      <div class="card" style="padding:24px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:var(--text-primary);">👥 Staff Access</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:18px;">Set an Employee Passcode. Staff log in with it (via "Employee login" on the sign-in screen) and get a restricted view — no money, payouts, reports, settings, or delete.</div>
+        <div class="form-group">
+          <label class="form-label">Employee Passcode</label>
+          <input type="text" class="form-input" id="empPasscode" placeholder="e.g. 4–8 digits/letters" autocomplete="off"/>
+        </div>
+        <button class="btn btn-primary" style="width:100%;" onclick="saveEmpPasscode()">Save Employee Passcode</button>
+        <div id="empStatus" style="font-size:11px;color:var(--text-muted);margin-top:10px;"></div>
+      </div>
+
       <!-- Backup & Restore -->
       <div class="card" style="padding:24px;">
         <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:var(--text-primary);">Backup &amp; Restore</div>
@@ -223,6 +235,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script src="firebase-sync.js"></script>
 <script src="data.js"></script>
@@ -238,6 +251,12 @@ function loadSettings() {
   document.getElementById('alertThreshold').value = s.alertThreshold|| '100000';
   if (window.fbAuth && window.fbAuth.currentUser)
     document.getElementById('authEmailDisplay').value = window.fbAuth.currentUser.email || '';
+  const epc = document.getElementById('empPasscode');
+  if (epc) {
+    epc.value = s.empPasscode || '';
+    document.getElementById('empStatus').textContent = s.empPasscode
+      ? '✓ Employee access is enabled.' : 'No employee passcode set — staff login is disabled.';
+  }
 
   // Company profile
   ['cpNtn','cpEmail','cpAddress','cpContact1','cpContact2',
@@ -438,16 +457,21 @@ function restoreRecord(entity, id) {
 }
 
 /* ── Company Profile ── */
-function previewCpImg(type, input) {
+async function previewCpImg(type, input) {
   const file = input.files[0]; if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const src = e.target.result;
-    document.getElementById(type === 'logo' ? 'cpLogo' : 'cpSig').value = src;
-    const prev = document.getElementById(type === 'logo' ? 'logoPreview' : 'sigPreview');
-    prev.innerHTML = `<img src="${src}" style="max-width:100%;max-height:100%;object-fit:contain;"/>`;
-  };
-  reader.readAsDataURL(file);
+  const hiddenId = type === 'logo' ? 'cpLogo' : 'cpSig';
+  const prev = document.getElementById(type === 'logo' ? 'logoPreview' : 'sigPreview');
+  const setSrc = src => { prev.innerHTML = `<img src="${src}" style="max-width:100%;max-height:100%;object-fit:contain;"/>`; };
+  try {
+    // Logo/signature kept a touch larger & higher quality for print clarity
+    const dataUrl = await ImageStore.compress(file, 500, 0.85);
+    document.getElementById(hiddenId).value = dataUrl;
+    setSrc(dataUrl);
+    FleetDB.showToast('Uploading…');
+    const url = await ImageStore.upload(dataUrl, 'company');
+    document.getElementById(hiddenId).value = url;
+    setSrc(url);
+  } catch (e) { FleetDB.showToast('Could not process image', 'error'); }
 }
 function clearCpImg(type) {
   const isLogo = type === 'logo';
@@ -466,6 +490,14 @@ function saveCompanyProfile() {
   if (sig)  data.cpSig  = sig;
   FleetDB.updateSettings(data);
   FleetDB.showToast('Company profile saved');
+}
+
+function saveEmpPasscode() {
+  const code = document.getElementById('empPasscode').value.trim();
+  FleetDB.updateSettings({ empPasscode: code });
+  document.getElementById('empStatus').textContent = code
+    ? '✓ Employee access is enabled.' : 'No employee passcode set — staff login is disabled.';
+  FleetDB.showToast(code ? 'Employee passcode saved' : 'Employee access disabled');
 }
 
 loadSettings();

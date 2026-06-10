@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Receivables — Royal Motors</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar" id="topbar"></header>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Receivables</div>
+        <div class="page-subtitle" id="rcSubtitle">Money customers still owe — unpaid balances on active bookings</div>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-secondary" onclick="exportDues()">⬇ Export CSV</button>
+      </div>
+    </div>
+
+    <div class="grid-4 mb-5" id="rcStats"></div>
+
+    <!-- Per-customer summary -->
+    <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px;">Owed by Customer</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:24px;" id="rcCustomers"></div>
+
+    <!-- Filters -->
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+      <div class="topbar-search" style="width:240px;">
+        <span class="search-icon">⌕</span>
+        <input type="text" placeholder="Customer, route, booking ID…" id="rcSearch" aria-label="Search"/>
+      </div>
+      <select class="form-select" style="width:160px;height:34px;" id="rcStatus" onchange="render()">
+        <option value="">All unpaid</option>
+        <option value="confirmed">Confirmed</option>
+        <option value="pending">Pending</option>
+        <option value="hold">Hold</option>
+      </select>
+      <div style="margin-left:auto;font-size:13px;color:var(--text-secondary);">
+        <span id="rcCount" style="font-weight:600;color:var(--text-primary);">—</span> bookings with dues
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Booking ID</th><th>Date</th><th>Customer</th><th>Route / Dates</th>
+          <th style="text-align:right;">Total</th><th style="text-align:right;">Advance</th>
+          <th style="text-align:right;">Remaining</th><th>Status</th><th></th>
+        </tr></thead>
+        <tbody id="rcBody"></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+<nav class="mobile-nav" id="mobileNav"></nav>
+
+<!-- Firebase (cloud sync + auth) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-sync.js"></script>
+<script src="data.js"></script>
+<script>
+FleetDB.init('receivables.html');
+const E     = s => FleetDB.escapeHtml(s == null ? '' : s);
+const money = n => 'PKR ' + (n || 0).toLocaleString();
+let lastDues = [];
+
+// A "due" = an active (not completed/cancelled) booking whose gross exceeds the advance paid.
+function buildDues() {
+  return FleetDB.getBookings()
+    .filter(b => b.status !== 'completed' && b.status !== 'cancelled')
+    .map(b => {
+      const total = parseFloat(b.gross) || 0;
+      const adv   = parseFloat(b.advancePaid) || 0;
+      const remaining = total - adv;
+      const route = (b.fromLocation || b.toLocation)
+        ? (b.fromLocation || '—') + ' → ' + (b.toLocation || '—')
+        : FleetDB.fmtDate(b.tourFromDate) + ' → ' + FleetDB.fmtDate(b.tourToDate);
+      return {
+        id: b.id, date: b.requestedDate || b.createdAt || '', customer: b.customerName || 'Walk-in',
+        customerId: b.customerId, phone: b.customerPhone || '', route,
+        total, advance: adv, remaining, status: b.status || '',
+        ts: b.createdTs || (b.requestedDate ? Date.parse(b.requestedDate) : 0) || 0,
+      };
+    })
+    .filter(d => d.remaining > 0)            // only those that still owe
+    .sort((a, b) => b.ts - a.ts);
+}
+
+const ST_BADGE = { confirmed:'badge-green', pending:'badge-amber', hold:'badge-amber' };
+
+function render() {
+  const all = buildDues();
+
+  // Stat tiles (all dues, not filtered)
+  const totalDue = all.reduce((s, d) => s + d.remaining, 0);
+  const totalAdv = all.reduce((s, d) => s + d.advance, 0);
+  const byCust   = {};
+  all.forEach(d => { byCust[d.customerId || d.customer] = (byCust[d.customerId || d.customer] || 0) + d.remaining; });
+  document.getElementById('rcStats').innerHTML = [
+    ['Total Outstanding', money(totalDue),         'color:var(--amber)'],
+    ['Customers Owing',   Object.keys(byCust).length, ''],
+    ['Bookings w/ Dues',  all.length,              ''],
+    ['Advances Received', money(totalAdv),         'color:var(--emerald)'],
+  ].map(([l, v, s]) => `<div class="card" style="padding:14px;">
+    <div style="font-size:10px;color:var(--text-muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:5px;">${l}</div>
+    <div style="font-size:20px;font-weight:700;${s}">${v}</div>
+  </div>`).join('');
+
+  // Per-customer summary cards (top owers first)
+  const custMap = {};
+  all.forEach(d => {
+    const key = d.customerId || d.customer;
+    if (!custMap[key]) custMap[key] = { name: d.customer, phone: d.phone, due: 0, count: 0 };
+    custMap[key].due += d.remaining; custMap[key].count++;
+  });
+  const custList = Object.values(custMap).sort((a, b) => b.due - a.due);
+  document.getElementById('rcCustomers').innerHTML = custList.map(c => `<div class="card" style="padding:14px;">
+    <div style="font-size:13px;font-weight:700;">${E(c.name)}</div>
+    <div style="font-size:11px;color:var(--text-muted);font-family:var(--mono);margin-bottom:8px;">${E(c.phone || '—')}</div>
+    <div class="td-mono" style="font-size:18px;font-weight:700;color:var(--amber);">${money(c.due)}</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${c.count} booking${c.count !== 1 ? 's' : ''} owing</div>
+  </div>`).join('') || '<div style="font-size:13px;color:var(--text-muted);">No outstanding dues — all settled ✓</div>';
+
+  // Filtered detail table
+  const q  = (document.getElementById('rcSearch').value || '').toLowerCase();
+  const sf = document.getElementById('rcStatus').value;
+  let rows = all;
+  if (sf) rows = rows.filter(d => d.status === sf);
+  if (q)  rows = rows.filter(d =>
+    (d.customer || '').toLowerCase().includes(q) ||
+    (d.route    || '').toLowerCase().includes(q) ||
+    (d.id       || '').toLowerCase().includes(q));
+  lastDues = rows;
+  document.getElementById('rcCount').textContent = rows.length;
+
+  document.getElementById('rcBody').innerHTML = rows.map(d => `<tr style="background:rgba(234,179,8,.10);">
+    <td class="td-mono" style="font-size:11px;color:var(--text-muted);">${d.id}</td>
+    <td class="td-mono" style="font-size:12px;">${FleetDB.fmtDate(d.date)}</td>
+    <td>
+      <div style="font-size:13px;font-weight:600;">${E(d.customer)}</div>
+      <div style="font-size:11px;color:var(--text-muted);font-family:var(--mono);">${E(d.phone)}</div>
+    </td>
+    <td style="font-size:12px;color:var(--text-secondary);">${E(d.route)}</td>
+    <td style="text-align:right;" class="td-mono">${money(d.total)}</td>
+    <td style="text-align:right;color:var(--emerald);" class="td-mono">${d.advance ? money(d.advance) : '—'}</td>
+    <td style="text-align:right;font-weight:700;color:var(--amber);" class="td-mono">${money(d.remaining)}</td>
+    <td><span class="badge ${ST_BADGE[d.status] || 'badge-muted'}">${E(d.status)}</span></td>
+    <td><a href="trips.html" class="btn btn-secondary btn-sm" title="Manage in Records">Open</a></td>
+  </tr>`).join('') || '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--text-muted);">No outstanding dues 🎉</td></tr>';
+}
+
+function exportDues() {
+  if (!lastDues.length) { FleetDB.showToast('Nothing to export', 'error'); return; }
+  const esc = v => { const s = (v == null ? '' : String(v)); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const rows = [['Booking ID','Date','Customer','Phone','Route / Dates','Total','Advance','Remaining','Status']];
+  lastDues.forEach(d => rows.push([d.id, FleetDB.fmtDate(d.date), d.customer, d.phone, d.route, d.total, d.advance, d.remaining, d.status]));
+  const csv = rows.map(r => r.map(esc).join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'receivables_' + FleetDB.today() + '.csv';
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+  FleetDB.showToast('Exported ' + lastDues.length + ' dues');
+}
+
+document.getElementById('rcSearch').oninput = FleetDB.debounce(() => render(), 250);
+render();
+</script>
+</body>
+</html>

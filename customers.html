@@ -18,7 +18,8 @@
         <div class="page-subtitle" id="custSubtitle">Customer records &amp; booking history</div>
       </div>
       <div class="page-actions">
-        <button class="btn btn-primary" onclick="openAddModal()">+ Add Customer</button>
+        <button class="btn btn-secondary" onclick="exportCustomers()">⬇ Export CSV</button>
+        <a href="dispatch.html" class="btn btn-primary">+ New Booking</a>
       </div>
     </div>
 
@@ -35,6 +36,11 @@
         <option value="">All Status</option>
         <option value="active">Active</option>
         <option value="hold">Hold</option>
+      </select>
+      <select class="form-select" style="width:170px;height:34px;" id="custNewFilter" onchange="custPage=0;renderList()">
+        <option value="">All Customers</option>
+        <option value="7">🆕 New — last 7 days</option>
+        <option value="30">🆕 New — last 30 days</option>
       </select>
       <div style="margin-left:auto;font-size:13px;color:var(--text-secondary);">
         <span id="custCount" style="font-weight:600;color:var(--text-primary);">—</span> customers
@@ -155,7 +161,37 @@
 FleetDB.init('customers.html');
 const PAGE_SIZE = 50;
 let custPage = 0;
+let lastCustomerList = [];
 function gotoCustPage(p) { custPage = p; renderList(); }
+
+/* ── CSV export helper ── */
+function downloadCSV(filename, rows) {
+  const esc = v => {
+    const s = (v == null ? '' : String(v));
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const csv = rows.map(r => r.map(esc).join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(a.href);
+}
+
+function exportCustomers() {
+  const list = lastCustomerList.length ? lastCustomerList : FleetDB.getCustomers();
+  if (!list.length) { FleetDB.showToast('No customers to export', 'error'); return; }
+  const allTrips = FleetDB.getTrips();
+  const rows = [['Customer ID','Name','Phone','CNIC','Route','Address','Status','Joined','Bookings','Total Spent (PKR)']];
+  list.forEach(c => {
+    const bks = FleetDB.getCustomerBookingHistory(c.id);
+    const spent = allTrips.filter(t => t.customerId === c.id).reduce((s, t) => s + (t.gross || 0), 0);
+    rows.push([c.id, c.name, c.phone || '', c.cnic || '', c.route || '', c.address || '', c.status || '', FleetDB.fmtDate(c.createdAt), bks.length, spent]);
+  });
+  downloadCSV('customers_' + FleetDB.today() + '.csv', rows);
+  FleetDB.showToast('Exported ' + list.length + ' customers');
+}
 
 /* ── Render Stats ── */
 function renderStats() {
@@ -179,6 +215,7 @@ function renderStats() {
 function renderList() {
   const q  = (document.getElementById('custSearch').value || '').toLowerCase();
   const sf = document.getElementById('custStatusFilter').value;
+  const nf = document.getElementById('custNewFilter').value;   // '', '7', '30'
 
   let customers = FleetDB.getCustomers();
   if (sf) customers = customers.filter(c => c.status === sf);
@@ -189,6 +226,23 @@ function renderList() {
     (c.route && c.route.toLowerCase().includes(q))
   );
 
+  // "New customers" filter — joined within the last N days (PKT)
+  if (nf) {
+    const cutoff = Date.now() - parseInt(nf, 10) * 86400000;
+    customers = customers.filter(c => {
+      const ts = c.createdTs || (c.createdAt ? Date.parse(c.createdAt) : 0) || 0;
+      return ts >= cutoff;
+    });
+  }
+
+  // Newest customers first
+  customers = customers.slice().sort((a, b) => {
+    const ka = a.createdTs || (a.createdAt ? Date.parse(a.createdAt) : 0) || 0;
+    const kb = b.createdTs || (b.createdAt ? Date.parse(b.createdAt) : 0) || 0;
+    return kb - ka;
+  });
+
+  lastCustomerList = customers;
   document.getElementById('custCount').textContent = customers.length;
   document.getElementById('custSubtitle').textContent =
     customers.length + ' customer' + (customers.length !== 1 ? 's' : '') + ' · click a row to view booking history';
@@ -205,12 +259,12 @@ function renderList() {
       <td class="td-mono" style="font-size:12px;">${E(c.phone || '—')}</td>
       <td style="font-size:12px;color:var(--text-secondary);">${E(c.route || '—')}</td>
       <td style="font-size:13px;font-weight:600;color:var(--accent);">${bookings.length}</td>
-      <td class="td-mono" style="font-size:12px;">${lastBk}</td>
+      <td class="td-mono" style="font-size:12px;">${FleetDB.fmtDate(lastBk)}</td>
       <td><span class="badge ${sc}">${E(c.status)}</span></td>
       <td onclick="event.stopPropagation()">
         <div style="display:flex;gap:5px;">
           <button class="btn btn-secondary btn-sm" onclick="editCustomer('${c.id}')">Edit</button>
-          <button class="btn btn-danger btn-sm"    onclick="removeCustomer('${c.id}')">Del</button>
+          ${FleetDB.getRole()==='owner' ? `<button class="btn btn-danger btn-sm" onclick="removeCustomer('${c.id}')">Del</button>` : ''}
         </div>
       </td>
     </tr>`;
@@ -317,12 +371,12 @@ function bookingRecordRow(b, allTrips, vehicles, drivers) {
     return v ? v.plate : '?';
   }).join(', ') || '—';
 
-  const route = b.serviceType === 'pick_drop'
+  const route = (b.fromLocation || b.toLocation)
     ? `${b.fromLocation || '—'} → ${b.toLocation || '—'}`
     : `${b.tourFromDate || '—'} → ${b.tourToDate || '—'}`;
 
   return {
-    date:   b.requestedDate || b.createdAt || '—',
+    date:   FleetDB.fmtDate(b.requestedDate || b.createdAt),
     type:   b.serviceType === 'pick_drop' ? 'Pick & Drop' : 'Duty / Tour',
     route, driverStr, vehStr, amount, status: b.status || '—',
   };
@@ -349,7 +403,7 @@ function openHistory(customerId) {
     ['Phone',   c.phone   || '—'],
     ['CNIC',    c.cnic    || '—'],
     ['Address', c.address || '—'],
-    ['Since',   c.createdAt || '—'],
+    ['Since',   FleetDB.fmtDate(c.createdAt)],
     ['Status',  c.status  || 'active'],
   ].map(([l,v]) => `<div>
     <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;">${l}</div>
@@ -456,7 +510,7 @@ function downloadCustomerRecord() {
 
 <table class="info">
   <tr>${infoCell('Name', c.name)}${infoCell('Phone', c.phone)}</tr>
-  <tr>${infoCell('CNIC', c.cnic)}${infoCell('Customer Since', c.createdAt)}</tr>
+  <tr>${infoCell('CNIC', c.cnic)}${infoCell('Customer Since', FleetDB.fmtDate(c.createdAt))}</tr>
   <tr>${infoCell('Address', c.address)}${infoCell('Status', c.status)}</tr>
   <tr><td style="border:none;padding:2px 0;"><span style="color:#666;">Record generated:</span> <strong>${E(FleetDB.nowPKT())}</strong></td><td style="border:none;"></td></tr>
 </table>

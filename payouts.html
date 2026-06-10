@@ -24,6 +24,7 @@
           <option>Cash</option>
           <option>Cheque</option>
         </select>
+        <button class="btn btn-secondary" onclick="exportPayouts()">⬇ Export CSV</button>
         <button class="btn btn-primary" onclick="openNewPayoutModal()">⇄ Issue Payout</button>
       </div>
     </div>
@@ -105,7 +106,30 @@ document.getElementById('npDate').value = FleetDB.today();
 const PAGE_SIZE = 50;
 let payoutPage = 0;
 let editingPayoutId = null;
+let lastPayoutList = [];
 function gotoPayoutPage(p) { payoutPage = p; render(); }
+
+/* ── CSV export ── */
+function downloadCSV(filename, rows) {
+  const esc = v => { const s = (v == null ? '' : String(v)); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const csv = rows.map(r => r.map(esc).join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+}
+function exportPayouts() {
+  const list = lastPayoutList.length ? lastPayoutList : FleetDB.getPayouts();
+  if (!list.length) { FleetDB.showToast('No payouts to export', 'error'); return; }
+  const vendors = FleetDB.getVendors();
+  const rows = [['Payout ID','Date','Vendor','Method','Amount (PKR)','Notes']];
+  list.forEach(p => {
+    const v = vendors.find(x => x.id === p.vendorId);
+    rows.push([p.id, FleetDB.fmtDate(p.date), v ? v.name : '', p.method || '', p.amount || 0, p.notes || '']);
+  });
+  downloadCSV('payouts_' + FleetDB.today() + '.csv', rows);
+  FleetDB.showToast('Exported ' + list.length + ' payouts');
+}
 
 FleetDB.getVendors().forEach(v => {
   const o = document.createElement('option'); o.value = v.id; o.textContent = v.name;
@@ -127,6 +151,7 @@ function render() {
     (!dFrom || p.date >= dFrom) &&
     (!dTo   || p.date <= dTo)
   );
+  lastPayoutList = payouts;
 
   // Stats
   const total   = FleetDB.getPayouts().reduce((s,p)=>s+(p.amount||0),0);
@@ -165,7 +190,7 @@ function render() {
     const vnBadge = v ? `<span style="display:inline-flex;align-items:center;gap:5px;">
       <span style="width:18px;height:18px;border-radius:3px;background:${v.color}33;color:${v.color};display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;">${E(v.name[0])}</span>${E(v.name)}</span>` : '—';
     return `<tr>
-      <td class="td-mono">${p.date}</td>
+      <td class="td-mono">${FleetDB.fmtDate(p.date)}</td>
       <td>${vnBadge}</td>
       <td><span class="badge badge-teal">${E(p.method)}</span></td>
       <td style="text-align:right;" class="td-amount positive">PKR ${(p.amount||0).toLocaleString()}</td>
